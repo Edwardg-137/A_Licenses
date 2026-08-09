@@ -33,7 +33,7 @@ Aislamiento por **columna `tenantId`** en todas las tablas de negocio (decisión
 La máquina de estados del expediente (`ApplicationStatus`) sigue `mvp_docs/03-flujo-expediente-digital.md`:
 `BORRADOR → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA ⇄ EN_CORRECCION → ALINEACION_PROGRAMADA → PENDIENTE_DE_PAGO → LICENCIA_EMITIDA → RECEPCION_DE_OBRA → CERRADO`, con salida a `RECHAZADO` tras superar las rondas de corrección.
 
-**Implementado (Fase 2):** `BORRADOR → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA`. La validación automática es síncrona al enviar (por eso `EN_VALIDACION` no aparece como estado persistido: dura segundos). El resto de transiciones se implementan en las fases 3–5. Las transiciones las ejecuta exclusivamente el servicio `applications` (nunca el cliente), con entrada de auditoría y notificaciones en cada una.
+**Implementado (Fases 2–3):** `BORRADOR → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA ⇄ EN_CORRECCION → ALINEACION_PROGRAMADA`, y la salida a `RECHAZADO` (con dictamen). La validación automática es síncrona al enviar (por eso `EN_VALIDACION` no aparece como estado persistido: dura segundos). Las transiciones de revisión las ejecuta el módulo `review` (marcado de documentos, observaciones por ronda, aprobación, rechazo y reenvío de correcciones) según las reglas de la decisión D-010; las de ingreso, el módulo `applications`. `PENDIENTE_DE_PAGO` y posteriores se implementan en las fases 4–5. Toda transición registra auditoría y notificación.
 
 ### Documentos
 

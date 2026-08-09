@@ -80,3 +80,16 @@
 - **Decisión:** (1) si el contenido detectado **contradice** el MIME declarado, se rechaza con HTTP 400 (archivo falso); (2) si el contenido **no es reconocible**, se acepta el MIME del cliente (el revisor humano lo valida); (3) DWG se detecta por la firma ASCII `AC` + versión → `image/vnd.dwg`; (4) buffers cortos se respaldan con firmas mínimas (`%PDF`, JPEG `FFD8FF`, PNG).
 - **Justificación:** Equilibrio entre seguridad (bloquea suplantación de formato) y pragmatismo (no bloquea formatos sin firma estándar).
 - **Consecuencias:** Un JPG/PNG renombrado no puede hacerse pasar por PDF. Los archivos sospechosos pero no reconocibles quedan a criterio de la revisión técnica.
+
+## D-010 — Ciclo de vida de las observaciones del revisor
+
+- **Fecha:** 2026-08-09
+- **Contexto:** La `Observation` referencia a la versión concreta del documento observada (`ApplicationDocument`), pero el solicitante corrige **subiendo una versión nueva** (distinto `documentId`) y el revisor confirma sobre esa versión. Además, `mvp_docs/03` §5 exige que en la última ronda el revisor solo pueda aprobar o rechazar.
+- **Problema:** (1) ¿Cuándo se considera resuelta una observación si el documento al que apunta ya no es el vigente? (2) ¿Qué puede hacer el revisor en la ronda final?
+- **Decisión:**
+  1. Las observaciones se resuelven por **requisito** (`document.requirementId`), no por versión: marcar ✅ Conforme resuelve todas las pendientes de ese requisito (de cualquier ronda); una observación nueva sobre el mismo requisito sustituye (resuelve) a las anteriores pendientes.
+  2. Enviar a corrección exige observaciones sin resolver **de la ronda actual** (`correctionRound + 1`) y está bloqueado cuando `correctionRound + 1 >= maxCorrectionRounds` (ronda final: solo aprobar o rechazar).
+  3. Aprobar exige **cero observaciones sin resolver de cualquier ronda**: el revisor debe confirmar explícitamente cada documento corregido.
+  4. El rechazo con dictamen (mín. 20 caracteres) está disponible en cualquier ronda, no solo la final, para casos inviables desde el inicio.
+- **Justificación:** Coherencia del historial de rondas (ninguna observación queda "colgada") y fidelidad al flujo aprobado, sin impedir rechazos tempranos fundamentados.
+- **Consecuencias:** El estado `ALINEACION_PROGRAMADA` solo se alcanza con expediente completamente conforme. El reenvío del solicitante exige que ningún documento vigente siga marcado (los reemplazos nacen como `PENDIENTE`).

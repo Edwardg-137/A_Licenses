@@ -179,6 +179,18 @@ export class ApplicationsService {
             uploadedAt: true,
           },
         },
+        observations: {
+          orderBy: [{ round: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            author: { select: { fullName: true } },
+            document: {
+              select: {
+                requirementId: true,
+                requirement: { select: { code: true, name: true } },
+              },
+            },
+          },
+        },
       },
     });
     if (!application) throw new NotFoundException('Expediente no encontrado');
@@ -189,7 +201,21 @@ export class ApplicationsService {
       application.documents,
     );
 
-    return { ...application, validationReport };
+    // Marca los documentos reemplazados tras una observación (el revisor los
+    // distingue en verde respecto a la ronda anterior)
+    const documents = application.documents.map((doc) => {
+      const lastObservation = application.observations
+        .filter((o) => o.document?.requirementId === doc.requirementId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      return {
+        ...doc,
+        replacedAfterObservation: Boolean(
+          lastObservation && doc.uploadedAt > lastObservation.createdAt,
+        ),
+      };
+    });
+
+    return { ...application, documents, validationReport };
   }
 
   /** Tipos de licencia activos del tenant con sus requisitos (para el asistente de creación). */
@@ -317,8 +343,8 @@ export class ApplicationsService {
 
   // ────────────────────────── Helpers internos ──────────────────────────
 
-  /** Informe por documento: presencia, formato e integridad (tamaño). */
-  private buildValidationReport(
+  /** Informe por documento: presencia, formato e integridad (tamaño). Público: lo reutiliza el módulo review. */
+  buildValidationReport(
     requirements: {
       id: string;
       code: string;

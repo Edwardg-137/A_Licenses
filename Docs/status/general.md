@@ -19,7 +19,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 | Fase 0 — Setup, modelo de datos, documentación | ✅ Completada y verificada |
 | Fase 1 — Autenticación y gestión de usuarios | ✅ Completada y verificada |
 | Fase 2 — Expediente, clasificación y documentos | ✅ Completada y verificada |
-| Fase 3 — Revisión, observaciones y correcciones | ⬜ No iniciada |
+| Fase 3 — Revisión, observaciones y correcciones | ✅ Completada y verificada |
 | Fase 4 — Alineación, pago (simulado) e inspección final | ⬜ No iniciada |
 | Fase 5 — Emisión de licencia (PDF + QR) | ⬜ No iniciada |
 | Fase 6 — Dashboard y pulido | ⬜ No iniciada |
@@ -33,7 +33,8 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Frontend:** páginas de login, registro, panel de administración de usuarios, asistente de nueva solicitud (onboarding pre-trámite + clasificación F08 + datos del proyecto), expediente con carga/verificación/envío de documentos, y bandeja del revisor con filtros.
 - **Expedientes:** creación con clasificación automática F08 (vivienda unifamiliar ≤ 700 m², fuera de Centro Histórico), formulario del proyecto, carga de documentos con validación de MIME **por contenido** (detección de archivos falsos), versionado por reemplazo, "Verificar antes de enviar", envío con transición `BORRADOR → OBSERVADO_FORMATO / EN_REVISION_TECNICA`.
 - **Documentos:** almacenamiento en disco local con nombres UUID (decisión D-007), descarga/preview autenticado con streaming; PDF/JPG se abren en pestaña nueva, **DWG solo descarga** (conversión a imagen pendiente de un servicio conversor externo).
-- **Notificaciones in-app:** envío de expediente, observación por formato, expediente en revisión y asignación de revisor. Correo electrónico pendiente (decisión D-003).
+- **Revisión técnica (ciclo de correcciones):** el revisor marca cada documento ✅ Conforme / ⚠️ Con observación / ❌ Requiere reemplazo, con texto y prioridad (Alta/Media/Baja); envía a corrección (`EN_CORRECCION`); el solicitante solo puede reemplazar los documentos observados y reenvía; el revisor distingue en verde los documentos reemplazados; máximo de rondas configurable (3 por defecto), en la ronda final solo cabe aprobar (`ALINEACION_PROGRAMADA`) o rechazar con dictamen (`RECHAZADO`). Historial de rondas visible para ambas partes (decisión D-010).
+- **Notificaciones in-app:** envío de expediente, observación por formato, expediente en revisión, asignación de revisor, envío a corrección, correcciones recibidas, aprobación técnica y rechazo. Correo electrónico pendiente (decisión D-003).
 - **Auditoría:** cada creación, carga/reemplazo de documento, envío y asignación queda en `AuditLog` inmutable.
 - **Seed:** tenant "Municipalidad de Guatemala", usuarios de prueba de cada rol, y tipo de licencia L-01 con los 15 requisitos documentales (D-01…D-15; D-15 con etapa `PAGO`).
 
@@ -83,9 +84,9 @@ Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol:
 | Rol | Correo | Contraseña | Qué puede hacer hoy |
 | :--- | :--- | :--- | :--- |
 | Administrador | `admin@permisogt.local` | `Admin123!` | Panel de usuarios: aprobar solicitantes, crear Revisores/Inspectores, activar/desactivar |
-| Revisor Municipal | `revisor@permisogt.local` | `Revisor123` | Bandeja de expedientes con filtros y detalle de documentos (solo lectura; observaciones en Fase 3) |
+| Revisor Municipal | `revisor@permisogt.local` | `Revisor123` | Bandeja con filtros; revisión documental (✅/⚠️/❌ con texto y prioridad), enviar a corrección, aprobar técnicamente o rechazar con dictamen |
 | Inspector | `inspector@permisogt.local` | `Inspector123` | (Su agenda de visitas llega en la Fase 4) |
-| Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión |
+| Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión; atender observaciones (reemplazar solo documentos observados) y reenviar correcciones |
 
 Adicionalmente existen dos cuentas creadas durante las pruebas de la Fase 1: `arquitecto@test.gt` (Solicitante, contraseña `Secreto123`) y `revisor@muniguate.gt` (Revisor, contraseña `Revisor123`).
 

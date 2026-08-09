@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
+import RoundsHistory, { ObservationItem } from '@/components/RoundsHistory';
 import StatusBadge from '@/components/StatusBadge';
 import { api, apiUpload, ApiError, openDocumentPreview } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -25,6 +26,7 @@ interface CurrentDocument {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: string;
+  reviewStatus: string;
 }
 
 interface ValidationItem {
@@ -41,8 +43,15 @@ interface ApplicationDetail {
   formCode: string;
   formData: Record<string, string | number | boolean | undefined>;
   correctionRound: number;
-  licenseType: { code: string; name: string; requirements: Requirement[] };
+  rejectedReason: string | null;
+  licenseType: {
+    code: string;
+    name: string;
+    maxCorrectionRounds: number;
+    requirements: Requirement[];
+  };
   documents: CurrentDocument[];
+  observations: ObservationItem[];
   validationReport: ValidationItem[];
 }
 
@@ -87,6 +96,7 @@ export default function ExpedienteDetailPage() {
   if (!user || user.role !== 'SOLICITANTE') return null;
 
   const editable = detail ? EDITABLE_STATES.includes(detail.status) : false;
+  const inCorrection = detail?.status === 'EN_CORRECCION';
 
   async function onUpload(requirementId: string, e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -143,6 +153,21 @@ export default function ExpedienteDetailPage() {
     }
   }
 
+  async function onResubmit() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/applications/${params.id}/resubmit`, { method: 'POST' });
+      await load();
+      setNotice('Correcciones enviadas. Su expediente vuelve a revisión técnica.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!detail && !error) {
     return (
       <div className="min-h-screen">
@@ -161,6 +186,13 @@ export default function ExpedienteDetailPage() {
   const ingresoValid = ingresoRequirements.every(
     (r) => reportByRequirement.get(r.id)?.valid,
   );
+  const pendingObservations =
+    detail?.observations.filter((o) => !o.resolvedAt) ?? [];
+  /** Documentos que aún están marcados y deben reemplazarse antes de reenviar. */
+  const stillMarkedCount =
+    detail?.documents.filter((d) =>
+      ['CON_OBSERVACION', 'REQUIERE_REEMPLAZO'].includes(d.reviewStatus),
+    ).length ?? 0;
 
   return (
     <div className="min-h-screen">
@@ -188,6 +220,47 @@ export default function ExpedienteDetailPage() {
               </div>
               <StatusBadge status={detail.status} />
             </div>
+
+            {/* Avisos de estado */}
+            {inCorrection && (
+              <div className="mt-4 rounded-lg border border-orange-300 bg-orange-50 p-4">
+                <p className="text-sm font-semibold text-orange-900">
+                  ⚠️ Su expediente tiene {pendingObservations.length} observación(es) — Ronda{' '}
+                  {detail.correctionRound} de {detail.licenseType.maxCorrectionRounds}
+                </p>
+                <p className="mt-1 text-sm text-orange-800">
+                  Reemplace únicamente los documentos marcados (el resto está bloqueado) y luego
+                  reenvíe las correcciones.
+                </p>
+                <ul className="mt-2 list-inside list-disc text-sm text-orange-800">
+                  {pendingObservations.map((obs) => (
+                    <li key={obs.id}>
+                      <strong>{obs.document?.requirement.code}</strong> [{obs.priority}]: {obs.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {detail.status === 'EN_REVISION_TECNICA' && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                Su expediente está siendo revisado por el personal municipal. Le notificaremos
+                cualquier novedad.
+              </div>
+            )}
+            {detail.status === 'ALINEACION_PROGRAMADA' && (
+              <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+                ✅ Su expediente fue aprobado técnicamente. El siguiente paso es la visita de
+                alineación territorial, que será programada por la municipalidad.
+              </div>
+            )}
+            {detail.status === 'RECHAZADO' && (
+              <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-4">
+                <p className="text-sm font-semibold text-red-900">Expediente rechazado</p>
+                <p className="mt-1 text-sm text-red-800">
+                  Dictamen: {detail.rejectedReason ?? 'Sin dictamen registrado.'}
+                </p>
+              </div>
+            )}
 
             {/* Datos del proyecto */}
             <section className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
@@ -259,6 +332,21 @@ export default function ExpedienteDetailPage() {
                     </button>
                   </div>
                 )}
+                {inCorrection && (
+                  <button
+                    onClick={onResubmit}
+                    disabled={busy || stillMarkedCount > 0}
+                    title={
+                      stillMarkedCount > 0
+                        ? `Quedan ${stillMarkedCount} documento(s) observado(s) por reemplazar`
+                        : ''
+                    }
+                    className="rounded bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    Reenviar correcciones
+                    {stillMarkedCount > 0 && ` (faltan ${stillMarkedCount})`}
+                  </button>
+                )}
               </div>
 
               <ul className="mt-4 space-y-3">
@@ -266,13 +354,20 @@ export default function ExpedienteDetailPage() {
                   const doc = docByRequirement.get(req.id);
                   const report = reportByRequirement.get(req.id);
                   const isPagoStage = req.stage === 'PAGO';
+                  const marked =
+                    doc && ['CON_OBSERVACION', 'REQUIERE_REEMPLAZO'].includes(doc.reviewStatus);
+                  const canUpload =
+                    !isPagoStage &&
+                    ((editable && !inCorrection) || (inCorrection && marked));
                   return (
                     <li
                       key={req.id}
                       className={`rounded border p-4 ${
                         report && !report.valid && !isPagoStage
                           ? 'border-red-300 bg-red-50'
-                          : 'border-gray-200'
+                          : marked
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-gray-200'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -284,6 +379,18 @@ export default function ExpedienteDetailPage() {
                                 Se carga en la fase de pago
                               </span>
                             )}
+                            {marked && (
+                              <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                                {doc.reviewStatus === 'REQUIERE_REEMPLAZO'
+                                  ? '❌ Debe reemplazarlo'
+                                  : '⚠️ Observado'}
+                              </span>
+                            )}
+                            {doc?.reviewStatus === 'CONFORME' && (
+                              <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                                ✓ Conforme
+                              </span>
+                            )}
                           </p>
                           {req.helpText && (
                             <p className="mt-0.5 text-xs text-gray-500">{req.helpText}</p>
@@ -293,12 +400,12 @@ export default function ExpedienteDetailPage() {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          {report && !isPagoStage && (
+                          {report && !isPagoStage && !inCorrection && (
                             <span className="text-lg" title={report.valid ? 'Conforme' : report.issues.join('; ')}>
                               {report.valid ? '✅' : '⚠️'}
                             </span>
                           )}
-                          {editable && !isPagoStage && (
+                          {canUpload && (
                             <>
                               <input
                                 ref={(el) => {
@@ -322,6 +429,11 @@ export default function ExpedienteDetailPage() {
                               </button>
                             </>
                           )}
+                          {inCorrection && doc && !marked && !isPagoStage && (
+                            <span className="text-xs text-gray-400" title="Solo puede reemplazar los documentos observados">
+                              🔒 Bloqueado
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -340,7 +452,7 @@ export default function ExpedienteDetailPage() {
                         </div>
                       )}
 
-                      {report && !report.valid && !isPagoStage && (
+                      {report && !report.valid && !isPagoStage && !inCorrection && (
                         <ul className="mt-2 list-inside list-disc text-xs text-red-700">
                           {report.issues.map((issue) => (
                             <li key={issue}>{issue}</li>
@@ -352,6 +464,8 @@ export default function ExpedienteDetailPage() {
                 })}
               </ul>
             </section>
+
+            <RoundsHistory observations={detail.observations} />
           </>
         )}
       </main>

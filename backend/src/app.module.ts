@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { DocumentsModule } from './documents/documents.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewModule } from './review/review.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -19,6 +20,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     ApplicationsModule,
     DocumentsModule,
     NotificationsModule,
+    ReviewModule,
   ],
   providers: [
     // Autenticación global: todo endpoint requiere JWT salvo que se marque @Public()

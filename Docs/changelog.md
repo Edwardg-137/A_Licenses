@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-09 — Fase 3: Revisión técnica, observaciones y correcciones
+
+- **Descripción:** Nuevo módulo backend `review` (marcar documentos ✅/⚠️/❌ con texto y prioridad, `send-to-correction`, `approve-review`, `reject` con dictamen, `resubmit` del solicitante) con las reglas de rondas de la decisión D-010 (resolución por requisito, ronda final solo aprobar/rechazar). Carga restringida en `EN_CORRECCION` a documentos observados. Detalle del expediente enriquecido con observaciones, `maxCorrectionRounds` y bandera `replacedAfterObservation`. Frontend: interfaz de revisión del revisor (marcado por documento, barra de acciones, dictamen), vista del solicitante en corrección (observaciones, candado en documentos no observados, botón de reenvío), componente compartido `RoundsHistory` y avisos por estado (revisión, alineación programada, rechazado con dictamen).
+- **Documentos:** `implementations/2026-08-fase3-revision-y-correcciones.md`; `status/general.md`, `status/structure.md`, `status/architecture.md`, `status/decisions.md` (D-010).
+- **Verificación:** ✅ 14 pruebas E2E del ciclo completo (2 rondas de corrección, bloqueo de ronda final, aprobación, rechazo, casos negativos de permisos y validaciones); backend y frontend compilan sin errores.
+- **Impacto:** El ciclo de observaciones/correcciones del flujo municipal queda completo; el expediente puede llegar hasta `ALINEACION_PROGRAMADA` (o `RECHAZADO`). Base para la Fase 4 (alineación, pago e inspección final).
+
 ## 2026-08-09 — Fase 2: Expedientes, clasificación F08 y documentos
 
 - **Descripción:** Módulos `applications`, `documents` y `notifications`. Clasificación automática F08 (≤700 m² residencial, fuera de Centro Histórico), formulario del proyecto, carga de documentos con detección de MIME por contenido (rechaza archivos falsos), versionado por reemplazo, "Verificar antes de enviar", envío con transición a revisión técnica u observado por formato, bandeja del revisor con filtros, asignación de revisor por el Admin, notificaciones in-app y auditoría. Frontend: asistente de nueva solicitud (onboarding + clasificación + formulario), expediente con tarjetas de documentos, bandeja y detalle del revisor. `DocumentRequirement.stage` separa los documentos de ingreso del comprobante de pago (D-15).

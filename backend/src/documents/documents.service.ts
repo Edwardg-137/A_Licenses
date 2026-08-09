@@ -16,7 +16,11 @@ import { StorageService } from './storage.service';
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 /** Estados en los que el propietario puede cargar o reemplazar documentos. */
-const UPLOAD_ALLOWED_STATES: ApplicationStatus[] = ['BORRADOR', 'OBSERVADO_FORMATO'];
+const UPLOAD_ALLOWED_STATES: ApplicationStatus[] = [
+  'BORRADOR',
+  'OBSERVADO_FORMATO',
+  'EN_CORRECCION',
+];
 
 /**
  * Firmas mínimas para archivos demasiado cortos para el análisis completo de
@@ -81,6 +85,22 @@ export class DocumentsService {
     });
     if (!requirement) {
       throw new NotFoundException('El requisito no pertenece a este tipo de licencia');
+    }
+
+    // En EN_CORRECCION solo se pueden reemplazar los documentos observados
+    // (mvp_docs/03-flujo §4: "el resto queda bloqueado")
+    if (application.status === 'EN_CORRECCION') {
+      const currentDoc = await this.prisma.applicationDocument.findFirst({
+        where: { applicationId, requirementId, isCurrent: true },
+      });
+      const marked =
+        currentDoc &&
+        ['CON_OBSERVACION', 'REQUIERE_REEMPLAZO'].includes(currentDoc.reviewStatus);
+      if (!marked) {
+        throw new BadRequestException(
+          `El documento ${requirement.code} no está observado; en estado de corrección solo se pueden reemplazar los documentos observados.`,
+        );
+      }
     }
 
     // Detección de MIME real por contenido del archivo (decisión D-009).
