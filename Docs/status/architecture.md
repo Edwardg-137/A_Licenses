@@ -28,16 +28,27 @@ Aislamiento por **columna `tenantId`** en todas las tablas de negocio (decisión
   2. `RolesGuard` — endpoints con `@Roles(...)` exigen el rol indicado (ej. todo `/users` requiere `ADMIN`).
 - La estrategia JWT re-consulta el usuario en BD en cada request para rechazar cuentas desactivadas con tokens aún vigentes.
 
-## Flujo de datos del expediente (diseño; fases 2+)
+## Flujo de datos del expediente
 
 La máquina de estados del expediente (`ApplicationStatus`) sigue `mvp_docs/03-flujo-expediente-digital.md`:
-`BORRADOR → EN_VALIDACION → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA ⇄ EN_CORRECCION → ALINEACION_PROGRAMADA → PENDIENTE_DE_PAGO → LICENCIA_EMITIDA → RECEPCION_DE_OBRA → CERRADO`, con salida a `RECHAZADO` tras superar las rondas de corrección.
+`BORRADOR → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA ⇄ EN_CORRECCION → ALINEACION_PROGRAMADA → PENDIENTE_DE_PAGO → LICENCIA_EMITIDA → RECEPCION_DE_OBRA → CERRADO`, con salida a `RECHAZADO` tras superar las rondas de corrección.
 
-El modelo de datos ya soporta ese flujo completo: requisitos configurables por tipo de licencia, documentos versionados por reemplazo, observaciones por ronda, inspecciones con fechas propuestas/confirmadas, pago con bandera `simulated` (decisión D-004), licencia con correlativo + token QR, y `AuditLog` de solo inserción.
+**Implementado (Fase 2):** `BORRADOR → (OBSERVADO_FORMATO) → EN_REVISION_TECNICA`. La validación automática es síncrona al enviar (por eso `EN_VALIDACION` no aparece como estado persistido: dura segundos). El resto de transiciones se implementan en las fases 3–5. Las transiciones las ejecuta exclusivamente el servicio `applications` (nunca el cliente), con entrada de auditoría y notificaciones en cada una.
+
+### Documentos
+
+- **Upload:** multipart (Multer 2, memoria, límite 25 MB) → detección de MIME por contenido → persistencia en disco vía `StorageService` → registro versionado (`ApplicationDocument`, uno solo `isCurrent` por requisito).
+- **Validación de formato real (D-009):** `file-type` v16 para buffers normales; respaldo de firmas mínimas (`%PDF`, JPEG, PNG) para archivos cortos; firma ASCII `AC` para DWG. Si el contenido detectado contradice lo declarado por el cliente, se rechaza con HTTP 400.
+- **Descarga:** `GET /documents/:id/download` autenticado, streaming con `Content-Disposition: inline` (el navegador muestra PDF/JPG y descarga DWG). Propietario o personal municipal del mismo tenant.
+- **Etapas de exigencia:** `DocumentRequirement.stage` = `INGRESO` (se valida al enviar) o `PAGO` (D-15, se exige en Fase 4).
+
+### Notificaciones y auditoría
+
+`NotificationsService` es el punto único de notificación (in-app hoy; el correo se conectará aquí cuando haya SMTP — D-003). `AuditLog` es de solo inserción: cada transición/carga registra tenant, usuario, acción y estados origen/destino.
 
 ## Servicios externos
 
-Ninguno activo en esta fase. Previstos: SMTP/SendGrid para correos (con cola BullMQ cuando haya Redis — decisión D-003), S3/MinIO para archivos en producción (en desarrollo se usará disco local `backend/uploads/`).
+Ninguno activo en esta fase. Previstos: SMTP/SendGrid para correos (con cola BullMQ cuando haya Redis — decisión D-003), S3/MinIO para archivos en producción (en desarrollo, disco local `backend/uploads/` — decisión D-007).
 
 ## Configuración
 

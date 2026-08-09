@@ -4,6 +4,9 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { ApplicationsModule } from './applications/applications.module';
+import { DocumentsModule } from './documents/documents.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -13,6 +16,9 @@ import { RolesGuard } from './auth/guards/roles.guard';
     PrismaModule,
     AuthModule,
     UsersModule,
+    ApplicationsModule,
+    DocumentsModule,
+    NotificationsModule,
   ],
   providers: [
     // Autenticación global: todo endpoint requiere JWT salvo que se marque @Public()

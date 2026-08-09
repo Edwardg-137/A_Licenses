@@ -64,3 +64,44 @@ async function tryRefresh(): Promise<boolean> {
   useAuthStore.getState().setSession(session);
   return true;
 }
+
+/** Sube un archivo con multipart/form-data (sin Content-Type manual). */
+export async function apiUpload<T = unknown>(
+  path: string,
+  formData: FormData,
+): Promise<T> {
+  const { accessToken } = useAuthStore.getState();
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    body: formData,
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = Array.isArray(body?.message)
+      ? body.message.join(', ')
+      : (body?.message ?? `Error ${response.status}`);
+    throw new ApiError(response.status, message);
+  }
+  return body as T;
+}
+
+/** Descarga un documento autenticado como Blob (para preview o descarga). */
+export async function apiDownloadBlob(documentId: string): Promise<Blob> {
+  const { accessToken } = useAuthStore.getState();
+  const response = await fetch(`${API_URL}/documents/${documentId}/download`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  if (!response.ok) throw new ApiError(response.status, 'No se pudo descargar el documento');
+  return response.blob();
+}
+
+/** Abre un documento en pestaña nueva (PDF/JPG se muestran inline; DWG se descarga). */
+export async function openDocumentPreview(documentId: string): Promise<void> {
+  const blob = await apiDownloadBlob(documentId);
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export { API_URL };

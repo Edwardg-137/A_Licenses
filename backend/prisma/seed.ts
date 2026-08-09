@@ -1,11 +1,14 @@
 /**
- * Seed inicial del MVP:
+ * Seed del MVP — PermisoGT.
+ *
+ * Crea:
  *  - Tenant "Municipalidad de Guatemala"
- *  - Usuario Admin municipal (credenciales desde .env)
+ *  - Usuarios de prueba para testing manual: Admin, Revisor, Inspector y Solicitante
+ *    (todos ACTIVE; sus credenciales se documentan en Docs/status/general.md)
  *  - Tipo de licencia L-01 (F08) con los 15 requisitos documentales D-01…D-15
  *    (fuente: mvp_docs/04-tipos-licencia-y-requisitos.md §2.3)
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -29,13 +32,50 @@ const L01_REQUIREMENTS = [
   { code: 'D-12', name: 'Presupuesto estimado de obra', mimes: [PDF], help: 'Base para el cálculo de timbre y tasa' },
   { code: 'D-13', name: 'Cronograma de actividades', mimes: [PDF], help: 'Plazo estimado de la obra por etapas' },
   { code: 'D-14', name: 'Formulario municipal de solicitud (F08)', mimes: [PDF], help: 'Firmado por propietario y profesional; sin tachones' },
-  { code: 'D-15', name: 'Comprobante de pago de tasa municipal', mimes: [PDF, JPG], help: 'Se carga después del cálculo y aprobación técnica' },
+  // stage PAGO: se exige en la fase de pago (Fase 4), no al enviar el expediente
+  { code: 'D-15', name: 'Comprobante de pago de tasa municipal', mimes: [PDF, JPG], help: 'Se carga después del cálculo y aprobación técnica', stage: 'PAGO' },
+];
+
+interface SeedUser {
+  email: string;
+  password: string;
+  fullName: string;
+  role: UserRole;
+  collegeType?: 'CIG' | 'CAG';
+  collegeNumber?: string;
+}
+
+const SEED_USERS: SeedUser[] = [
+  {
+    email: 'admin@permisogt.local',
+    password: process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!',
+    fullName: 'Carmen Administradora',
+    role: 'ADMIN',
+  },
+  {
+    email: 'revisor@permisogt.local',
+    password: 'Revisor123',
+    fullName: 'Roberto Revisor',
+    role: 'REVISOR',
+  },
+  {
+    email: 'inspector@permisogt.local',
+    password: 'Inspector123',
+    fullName: 'Ingrid Inspector',
+    role: 'INSPECTOR',
+  },
+  {
+    email: 'solicitante@permisogt.local',
+    password: 'Solicita123',
+    fullName: 'Ana Arquitecta',
+    role: 'SOLICITANTE',
+    collegeType: 'CAG',
+    collegeNumber: 'CAG-4521',
+  },
 ];
 
 async function main() {
   const tenantSlug = process.env.DEFAULT_TENANT_SLUG ?? 'guatemala';
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@permisogt.local';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!';
 
   const tenant = await prisma.tenant.upsert({
     where: { slug: tenantSlug },
@@ -50,19 +90,25 @@ async function main() {
     },
   });
 
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
-  await prisma.user.upsert({
-    where: { tenantId_email: { tenantId: tenant.id, email: adminEmail } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      email: adminEmail,
-      passwordHash,
-      fullName: 'Administrador Municipal',
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-  });
+  for (const seedUser of SEED_USERS) {
+    const passwordHash = await bcrypt.hash(seedUser.password, 10);
+    await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: seedUser.email } },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        email: seedUser.email,
+        passwordHash,
+        fullName: seedUser.fullName,
+        role: seedUser.role,
+        // Los usuarios del seed nacen ACTIVE; solo el registro web público
+        // de solicitantes queda PENDING_APPROVAL.
+        status: 'ACTIVE',
+        collegeType: seedUser.collegeType,
+        collegeNumber: seedUser.collegeNumber,
+      },
+    });
+  }
 
   const licenseType = await prisma.licenseType.upsert({
     where: { tenantId_code: { tenantId: tenant.id, code: 'L-01' } },
@@ -79,9 +125,10 @@ async function main() {
   });
 
   for (const [index, req] of L01_REQUIREMENTS.entries()) {
+    const stage = 'stage' in req ? req.stage : 'INGRESO';
     await prisma.documentRequirement.upsert({
       where: { licenseTypeId_code: { licenseTypeId: licenseType.id, code: req.code } },
-      update: {},
+      update: { stage }, // el seed puede corregir la etapa en bases ya existentes
       create: {
         licenseTypeId: licenseType.id,
         code: req.code,
@@ -90,11 +137,14 @@ async function main() {
         allowedMimeTypes: req.mimes,
         required: true,
         sortOrder: index + 1,
+        stage,
       },
     });
   }
 
-  console.log(`Seed completado: tenant "${tenant.name}", admin ${adminEmail}, L-01 con ${L01_REQUIREMENTS.length} requisitos.`);
+  console.log(
+    `Seed completado: tenant "${tenant.name}", ${SEED_USERS.length} usuarios de prueba, L-01 con ${L01_REQUIREMENTS.length} requisitos.`,
+  );
 }
 
 main()

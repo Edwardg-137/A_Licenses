@@ -53,3 +53,30 @@
 - **Decisión:** Usar `bcryptjs` (implementación JS pura, API compatible).
 - **Justificación:** Elimina el riesgo de instalación; el costo de rendimiento es aceptable para el volumen del MVP.
 - **Consecuencias:** Si el hashing se vuelve cuello de botella, se puede migrar a `bcrypt` o `argon2` sin cambiar el esquema (mismo formato de hash en el caso de bcrypt).
+
+## D-007 — Almacenamiento de archivos en disco local durante desarrollo
+
+- **Fecha:** 2026-08-09
+- **Contexto:** `mvp_docs/05-arquitectura-y-stack.md` prevé S3/MinIO con URLs prefirmadas; el entorno de desarrollo es Windows local sin Docker ni MinIO.
+- **Problema:** Dónde guardar los documentos del expediente en desarrollo sin levantar infraestructura extra.
+- **Decisión:** Disco local (`backend/uploads/<tenantId>/<applicationId>/<uuid>.<ext>`) detrás de un `StorageService` que es el único punto de contacto con el sistema de archivos. Descarga por endpoint autenticado con streaming (equivalente funcional a la URL prefirmada).
+- **Justificación:** Cero infraestructura adicional; el aislamiento en `StorageService` hace trivial la migración a S3/MinIO en staging/producción.
+- **Consecuencias:** `uploads/` no se versiona; nombres de archivo UUID impredecibles; el nombre original solo existe como metadato en BD. En producción se reemplaza la implementación, no la interfaz.
+
+## D-008 — `file-type` fijado en v16 (última versión CommonJS)
+
+- **Fecha:** 2026-08-09
+- **Contexto:** Desde v17, `file-type` es ESM-only y no puede cargarse con `require()` desde el build CommonJS de NestJS sin workarounds frágiles.
+- **Problema:** Compatibilidad del sistema de detección de MIME con el build del backend.
+- **Decisión:** Fijar `file-type@16.5.4` (sin `^`, para no saltar a v17+) + `@types/file-type` (v16 no incluye tipos propios).
+- **Justificación:** Mantiene el build CJS simple y estable; la API v16 cubre PDF/JPG/PNG y los formatos del MVP.
+- **Consecuencias:** Carencias de v16 (no detecta DWG, lanza End-Of-Stream con buffers cortos) se compensan en código (D-009). Si se migra el backend a ESM/Nest 11+, se podrá actualizar a la versión actual.
+
+## D-009 — Reglas de detección de MIME por contenido
+
+- **Fecha:** 2026-08-09
+- **Contexto:** La validación automática del MVP exige verificar el formato real del archivo, no la extensión (`mvp_docs/03` §4, OE-04).
+- **Problema:** `file-type` v16 no cubre DWG y falla (End-Of-Stream) con buffers muy cortos; además hay que decidir qué hacer cuando el contenido contradice al cliente.
+- **Decisión:** (1) si el contenido detectado **contradice** el MIME declarado, se rechaza con HTTP 400 (archivo falso); (2) si el contenido **no es reconocible**, se acepta el MIME del cliente (el revisor humano lo valida); (3) DWG se detecta por la firma ASCII `AC` + versión → `image/vnd.dwg`; (4) buffers cortos se respaldan con firmas mínimas (`%PDF`, JPEG `FFD8FF`, PNG).
+- **Justificación:** Equilibrio entre seguridad (bloquea suplantación de formato) y pragmatismo (no bloquea formatos sin firma estándar).
+- **Consecuencias:** Un JPG/PNG renombrado no puede hacerse pasar por PDF. Los archivos sospechosos pero no reconocibles quedan a criterio de la revisión técnica.

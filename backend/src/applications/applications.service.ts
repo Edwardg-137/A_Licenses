@@ -1,0 +1,404 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  Application,
+  ApplicationStatus,
+  Prisma,
+  UserRole,
+} from '@prisma/client';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateApplicationDto,
+  ProjectFormDataDto,
+} from './dto/create-application.dto';
+import { ListApplicationsDto } from './dto/list-applications.dto';
+
+export interface DocumentCheckResult {
+  requirementId: string;
+  code: string;
+  name: string;
+  stage: string;
+  hasDocument: boolean;
+  valid: boolean;
+  issues: string[];
+}
+
+/** Roles del personal municipal que pueden ver todos los expedientes del tenant. */
+const STAFF_ROLES: UserRole[] = ['REVISOR', 'INSPECTOR', 'ADMIN', 'SUPERADMIN'];
+
+@Injectable()
+export class ApplicationsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  // ────────────────────────── Clasificación ──────────────────────────
+
+  /**
+   * Regla del MVP (mvp_docs/03-flujo §3 y 04 §2.1): F08 aplica solo a vivienda
+   * unifamiliar residencial de ≤ 700 m² fuera del Centro Histórico.
+   */
+  classify(form: Pick<ProjectFormDataDto, 'uso' | 'areaConstruccionM2' | 'centroHistorico'>) {
+    const reasons: string[] = [];
+    if (form.uso !== 'RESIDENCIAL') {
+      reasons.push('El uso del inmueble no es residencial unifamiliar (requiere formulario F02 u otro trámite)');
+    }
+    if (form.areaConstruccionM2 > 700) {
+      reasons.push('El área de construcción supera los 700 m² permitidos para el formulario F08');
+    }
+    if (form.centroHistorico) {
+      reasons.push('Los inmuebles en Centro Histórico requieren dictamen del IDAEH y trámite presencial');
+    }
+    return {
+      formCode: reasons.length === 0 ? 'F08' : null,
+      available: reasons.length === 0,
+      reasons,
+    };
+  }
+
+  // ────────────────────────── CRUD del expediente ──────────────────────────
+
+  async create(user: AuthenticatedUser, dto: CreateApplicationDto) {
+    if (user.role !== 'SOLICITANTE') {
+      throw new ForbiddenException('Solo los solicitantes pueden crear expedientes');
+    }
+
+    const licenseType = await this.prisma.licenseType.findFirst({
+      where: { id: dto.licenseTypeId, tenantId: user.tenantId, active: true },
+    });
+    if (!licenseType) {
+      throw new NotFoundException('Tipo de licencia no encontrado o inactivo');
+    }
+
+    const classification = this.classify(dto.formData);
+    if (!classification.available) {
+      throw new BadRequestException({
+        message: 'El proyecto no califica para el trámite en línea (F08). Debe proceder presencialmente.',
+        reasons: classification.reasons,
+      });
+    }
+
+    // El colegiado responsable se toma del perfil verificado del solicitante
+    const applicant = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+
+    const application = await this.prisma.application.create({
+      data: {
+        tenantId: user.tenantId,
+        licenseTypeId: licenseType.id,
+        applicantId: user.id,
+        formCode: 'F08',
+        formData: {
+          ...dto.formData,
+          colegiadoTipo: applicant.collegeType,
+          colegiadoNumero: applicant.collegeNumber,
+        },
+      },
+    });
+
+    await this.audit(user.tenantId, user.id, application.id, 'Expediente creado en estado Borrador');
+
+    return application;
+  }
+
+  async update(user: AuthenticatedUser, id: string, dto: CreateApplicationDto['formData']) {
+    const application = await this.getOwnedByStatus(user, id, ['BORRADOR']);
+    await this.prisma.application.update({
+      where: { id: application.id },
+      data: { formData: dto as unknown as Prisma.InputJsonValue },
+    });
+    await this.audit(user.tenantId, user.id, id, 'Formulario del expediente actualizado');
+    return this.findOne(user, id);
+  }
+
+  // ────────────────────────── Listados ──────────────────────────
+
+  async list(user: AuthenticatedUser, filters: ListApplicationsDto) {
+    const where: Prisma.ApplicationWhereInput = {
+      tenantId: user.tenantId,
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: new Date(filters.from) } : {}),
+              ...(filters.to ? { lte: new Date(filters.to + 'T23:59:59.999Z') } : {}),
+            },
+          }
+        : {}),
+      // El solicitante solo ve sus propios expedientes
+      ...(user.role === 'SOLICITANTE' ? { applicantId: user.id } : {}),
+    };
+
+    return this.prisma.application.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        licenseType: { select: { code: true, name: true } },
+        applicant: { select: { fullName: true, email: true } },
+        reviewer: { select: { fullName: true } },
+      },
+    });
+  }
+
+  async findOne(user: AuthenticatedUser, id: string) {
+    const application = await this.prisma.application.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: {
+        licenseType: {
+          include: {
+            requirements: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+        applicant: {
+          select: {
+            fullName: true,
+            email: true,
+            collegeType: true,
+            collegeNumber: true,
+          },
+        },
+        reviewer: { select: { fullName: true } },
+        documents: {
+          where: { isCurrent: true },
+          select: {
+            id: true,
+            requirementId: true,
+            version: true,
+            fileName: true,
+            mimeType: true,
+            sizeBytes: true,
+            reviewStatus: true,
+            uploadedAt: true,
+          },
+        },
+      },
+    });
+    if (!application) throw new NotFoundException('Expediente no encontrado');
+    this.assertCanView(user, application);
+
+    const validationReport = this.buildValidationReport(
+      application.licenseType.requirements,
+      application.documents,
+    );
+
+    return { ...application, validationReport };
+  }
+
+  /** Tipos de licencia activos del tenant con sus requisitos (para el asistente de creación). */
+  listLicenseTypes(tenantId: string) {
+    return this.prisma.licenseType.findMany({
+      where: { tenantId, active: true },
+      include: { requirements: { orderBy: { sortOrder: 'asc' } } },
+    });
+  }
+
+  // ─────────────────── Validación automática y envío ───────────────────
+
+  /** "Verificar antes de enviar": informe sin cambiar el estado. */
+  async validate(user: AuthenticatedUser, id: string) {
+    const application = await this.getOwnedByStatus(user, id, ['BORRADOR', 'OBSERVADO_FORMATO']);
+    const withDocs = await this.prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: {
+        licenseType: { include: { requirements: { orderBy: { sortOrder: 'asc' } } } },
+        documents: { where: { isCurrent: true } },
+      },
+    });
+    return this.buildValidationReport(withDocs.licenseType.requirements, withDocs.documents);
+  }
+
+  /**
+   * Envío del expediente: validación automática de los documentos de etapa
+   * INGRESO (presencia, formato real, integridad) y transición de estado.
+   */
+  async submit(user: AuthenticatedUser, id: string) {
+    const application = await this.getOwnedByStatus(user, id, ['BORRADOR', 'OBSERVADO_FORMATO']);
+    const withDocs = await this.prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: {
+        licenseType: { include: { requirements: { orderBy: { sortOrder: 'asc' } } } },
+        documents: { where: { isCurrent: true } },
+        applicant: { select: { fullName: true } },
+      },
+    });
+
+    const report = this.buildValidationReport(
+      withDocs.licenseType.requirements,
+      withDocs.documents,
+    );
+    const allValid = report.every((r) => r.stage !== 'INGRESO' || r.valid);
+
+    if (!allValid) {
+      await this.prisma.application.update({
+        where: { id },
+        data: { status: 'OBSERVADO_FORMATO' },
+      });
+      await this.audit(user.tenantId, user.id, id, 'Validación automática fallida', 'BORRADOR', 'OBSERVADO_FORMATO');
+      await this.notifications.notifyUser(
+        user.id,
+        user.tenantId,
+        'Expediente observado por formato',
+        'Algunos documentos faltan o no tienen el formato correcto. Revise el informe de validación del expediente.',
+        id,
+      );
+      return { status: 'OBSERVADO_FORMATO' as const, validationReport: report };
+    }
+
+    await this.prisma.application.update({
+      where: { id },
+      data: {
+        status: 'EN_REVISION_TECNICA',
+        ...(application.submittedAt ? {} : { submittedAt: new Date() }),
+      },
+    });
+    await this.audit(user.tenantId, user.id, id, 'Expediente enviado a revisión técnica', application.status, 'EN_REVISION_TECNICA');
+    await this.notifications.notifyUser(
+      user.id,
+      user.tenantId,
+      'Expediente enviado',
+      'Su expediente pasó la validación automática y está en revisión técnica.',
+      id,
+    );
+    await this.notifications.notifyRole(
+      user.tenantId,
+      'REVISOR',
+      'Nuevo expediente en revisión',
+      `El expediente de ${withDocs.applicant.fullName} (${withDocs.formCode}) está listo para revisión técnica.`,
+      id,
+    );
+    await this.notifications.notifyRole(
+      user.tenantId,
+      'ADMIN',
+      'Expediente enviado',
+      `Nuevo expediente ${withDocs.formCode} de ${withDocs.applicant.fullName} en revisión técnica.`,
+      id,
+    );
+
+    return { status: 'EN_REVISION_TECNICA' as const, validationReport: report };
+  }
+
+  // ─────────────────── Asignación de revisor (Admin) ───────────────────
+
+  async assignReviewer(admin: AuthenticatedUser, id: string, reviewerId: string) {
+    const application = await this.prisma.application.findFirst({
+      where: { id, tenantId: admin.tenantId },
+    });
+    if (!application) throw new NotFoundException('Expediente no encontrado');
+
+    const reviewer = await this.prisma.user.findFirst({
+      where: { id: reviewerId, tenantId: admin.tenantId, role: 'REVISOR', status: 'ACTIVE' },
+    });
+    if (!reviewer) {
+      throw new BadRequestException('El usuario indicado no es un revisor activo de esta municipalidad');
+    }
+
+    await this.prisma.application.update({
+      where: { id },
+      data: { reviewerId },
+    });
+    await this.audit(admin.tenantId, admin.id, id, `Expediente asignado al revisor ${reviewer.fullName}`);
+    await this.notifications.notifyUser(
+      reviewerId,
+      admin.tenantId,
+      'Expediente asignado',
+      `Se le asignó un expediente (${application.formCode}) para revisión técnica.`,
+      id,
+    );
+    return this.findOne(admin, id);
+  }
+
+  // ────────────────────────── Helpers internos ──────────────────────────
+
+  /** Informe por documento: presencia, formato e integridad (tamaño). */
+  private buildValidationReport(
+    requirements: {
+      id: string;
+      code: string;
+      name: string;
+      stage: string;
+      required: boolean;
+      allowedMimeTypes: string[];
+    }[],
+    documents: {
+      requirementId: string;
+      mimeType: string;
+      sizeBytes: number;
+    }[],
+  ): DocumentCheckResult[] {
+    return requirements.map((req) => {
+      const doc = documents.find((d) => d.requirementId === req.id);
+      const issues: string[] = [];
+
+      if (!doc) {
+        if (req.required) issues.push('Documento no cargado');
+      } else {
+        if (!req.allowedMimeTypes.includes(doc.mimeType)) {
+          issues.push(`Formato no permitido (${doc.mimeType}). Aceptados: ${req.allowedMimeTypes.join(', ')}`);
+        }
+        if (doc.sizeBytes <= 0) {
+          issues.push('El archivo está vacío');
+        }
+      }
+
+      return {
+        requirementId: req.id,
+        code: req.code,
+        name: req.name,
+        stage: req.stage,
+        hasDocument: Boolean(doc),
+        valid: issues.length === 0,
+        issues,
+      };
+    });
+  }
+
+  /** Obtiene un expediente propio verificando que esté en uno de los estados permitidos. */
+  private async getOwnedByStatus(
+    user: AuthenticatedUser,
+    id: string,
+    statuses: ApplicationStatus[],
+  ) {
+    const application = await this.prisma.application.findFirst({
+      where: { id, tenantId: user.tenantId },
+    });
+    if (!application) throw new NotFoundException('Expediente no encontrado');
+    if (application.applicantId !== user.id) {
+      throw new ForbiddenException('Solo el propietario puede modificar este expediente');
+    }
+    if (!statuses.includes(application.status)) {
+      throw new BadRequestException(
+        `La acción no está permitida en el estado actual del expediente (${application.status})`,
+      );
+    }
+    return application;
+  }
+
+  private assertCanView(user: AuthenticatedUser, application: Application) {
+    const isOwner = application.applicantId === user.id;
+    const isStaff = STAFF_ROLES.includes(user.role as UserRole);
+    if (!isOwner && !isStaff) {
+      throw new ForbiddenException('No tiene acceso a este expediente');
+    }
+  }
+
+  private audit(
+    tenantId: string,
+    userId: string,
+    applicationId: string,
+    action: string,
+    fromStatus?: ApplicationStatus,
+    toStatus?: ApplicationStatus,
+  ) {
+    return this.prisma.auditLog.create({
+      data: { tenantId, userId, applicationId, action, fromStatus, toStatus },
+    });
+  }
+}
