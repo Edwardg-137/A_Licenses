@@ -40,7 +40,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Agenda del inspector** (`/inspector`): solicitudes pendientes, propuesta de fechas, registro de resultado con evidencia fotográfica.
 - **Notificaciones in-app:** envío de expediente, observaciones, correcciones, aprobación, rechazo, inspección solicitada/fechas propuestas/visita confirmada, alineación conforme con monto, pago confirmado y resultado de recepción. Correo electrónico pendiente (decisión D-003).
 - **Auditoría:** cada creación, carga/reemplazo de documento, envío y asignación queda en `AuditLog` inmutable.
-- **Seed:** tenant "Municipalidad de Guatemala", usuarios de prueba de cada rol, y tipo de licencia L-01 con los 15 requisitos documentales (D-01…D-15; D-15 con etapa `PAGO`).
+- **Seed:** tenant "Municipalidad de Guatemala", **dos usuarios de prueba ACTIVE por cada rol** (Admin, Revisor, Inspector, Solicitante; ver credenciales más abajo), y tipo de licencia L-01 con los 15 requisitos documentales (D-01…D-15; D-15 con etapa `PAGO`).
 
 ### Limitaciones conocidas
 
@@ -58,6 +58,8 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Frontend:** Next.js 14 (App Router), React 18, Tailwind CSS 3, Zustand (estado de sesión persistido).
 
 ## Cómo ejecutar la plataforma
+
+> Guía paso a paso desde cero (instalación de Git, Node.js, PostgreSQL, navegador, configuración y arranque): ver el **[`README.md`](../../README.md)** en la raíz del repositorio.
 
 ### En esta máquina (entorno ya configurado)
 
@@ -86,7 +88,9 @@ Luego abrir **http://localhost:3000**.
 
 ### Credenciales de prueba (solo entorno de desarrollo)
 
-Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol:
+Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol. Hay **dos cuentas ACTIVE por rol**:
+
+#### Set A
 
 | Rol | Correo | Contraseña | Qué puede hacer hoy |
 | :--- | :--- | :--- | :--- |
@@ -95,6 +99,17 @@ Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol:
 | Inspector | `inspector@permisogt.local` | `Inspector123` | Agenda de inspecciones: proponer fechas, registrar resultado con foto (alineación y recepción de obra) |
 | Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión; atender observaciones; confirmar fecha de visita; pagar (simulado o comprobante externo); solicitar recepción de obra |
 
+#### Set B
+
+| Rol | Correo | Contraseña | Notas |
+| :--- | :--- | :--- | :--- |
+| Administrador | `admin2@permisogt.local` | `Admin456!` | Segunda cuenta ADMIN |
+| Revisor Municipal | `revisor2@permisogt.local` | `Revisor456` | Segunda cuenta REVISOR |
+| Inspector | `inspector2@permisogt.local` | `Inspector456` | Segunda cuenta INSPECTOR |
+| Solicitante | `solicitante2@permisogt.local` | `Solicita456` | Profesional CIG (`CIG-8832`); el Set A usa CAG |
+
 Adicionalmente existen dos cuentas creadas durante las pruebas de la Fase 1: `arquitecto@test.gt` (Solicitante, contraseña `Secreto123`) y `revisor@muniguate.gt` (Revisor, contraseña `Revisor123`).
 
 Para probar el **flujo de aprobación de solicitantes**, registra una cuenta nueva desde `/registro`: quedará pendiente hasta que el Admin la apruebe en `/admin/usuarios`.
+
+Si la base ya estaba sembrada antes de añadir el Set B, vuelve a ejecutar `npx prisma db seed` desde `backend/` para crear las cuentas nuevas (el seed usa `upsert` y no altera las existentes).

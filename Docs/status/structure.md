@@ -19,7 +19,7 @@ c:\building_permits\
 | Ruta | Propósito |
 | :--- | :--- |
 | `prisma/schema.prisma` | Modelo de datos completo del MVP (tenants, usuarios, tipos de licencia, expedientes, documentos, observaciones, inspecciones, pagos, licencias, notificaciones, auditoría) |
-| `prisma/seed.ts` | Seed: tenant Guatemala, usuarios de prueba de cada rol, L-01 con requisitos D-01…D-15 |
+| `prisma/seed.ts` | Seed: tenant Guatemala, 2 usuarios de prueba por cada rol (Admin, Revisor, Inspector, Solicitante), L-01 con requisitos D-01…D-15 |
 | `src/main.ts` | Bootstrap: prefijo `/api`, CORS, ValidationPipe global |
 | `src/app.module.ts` | Módulo raíz; registra guards globales (JWT + roles) |
 | `src/prisma/` | `PrismaService` global (conexión a BD) |

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-09 — Segundo set de usuarios de prueba y README de instalación
+
+- **Descripción:** El seed crea ahora dos usuarios ACTIVE por cada rol (Admin, Revisor, Inspector, Solicitante). Se documentaron las credenciales del Set B en `Docs/status/general.md` y se añadió `README.md` en la raíz con una guía detallada de instalación (Git, Node.js, PostgreSQL, clonado, configuración de `.env`, migraciones, seed y arranque de backend/frontend) pensada para que otra persona pueda levantar el proyecto desde cero.
+- **Documentos:** `README.md` (nuevo); `status/general.md`, `status/structure.md`; `backend/prisma/seed.ts`.
+- **Impacto:** Facilita el onboarding de desarrolladores y el testing con cuentas paralelas por rol; no cambia la arquitectura ni el comportamiento de la API.
+
 ## 2026-08-09 — Fase 4: Alineación territorial, pago (simulado) y recepción de obra
 
 - **Descripción:** Nuevos módulos backend `inspections` (solicitud de alineación por revisor, propuesta de hasta 3 fechas por inspector, confirmación por solicitante, resultado con foto obligatoria; recepción de obra post-licencia con el mismo ciclo) y `payments` (cálculo de tasa F08 configurable `base + % sobre presupuesto`, pago en línea simulado con comprobante PDF generado en código adjuntado como D-15, carga de comprobante externo, confirmación municipal → `LICENCIA_EMITIDA`). Ajustes: carga de D-15 habilitada solo en `PENDIENTE_DE_PAGO`; observaciones generales (alineación no conforme) no bloquean la aprobación y se resuelven al re-aprobar (D-011); el documento D-15 vigente es la fuente de verdad del comprobante (D-012); campo opcional `presupuestoEstimadoQ` en el formulario del proyecto. Frontend: agenda del inspector (`/inspector`), tarjetas de inspección/pago/recepción en la vista del solicitante, solicitud de alineación y confirmación de pago en la del revisor.

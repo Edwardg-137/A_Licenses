@@ -3,8 +3,8 @@
  *
  * Crea:
  *  - Tenant "Municipalidad de Guatemala"
- *  - Usuarios de prueba para testing manual: Admin, Revisor, Inspector y Solicitante
- *    (todos ACTIVE; sus credenciales se documentan en Docs/status/general.md)
+ *  - Usuarios de prueba para testing manual: 2 de cada rol (Admin, Revisor, Inspector,
+ *    Solicitante); todos ACTIVE; credenciales en Docs/status/general.md y README.md
  *  - Tipo de licencia L-01 (F08) con los 15 requisitos documentales D-01…D-15
  *    (fuente: mvp_docs/04-tipos-licencia-y-requisitos.md §2.3)
  */
@@ -46,6 +46,7 @@ interface SeedUser {
 }
 
 const SEED_USERS: SeedUser[] = [
+  // --- Set A (cuentas principales de prueba) ---
   {
     email: 'admin@permisogt.local',
     password: process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!',
@@ -71,6 +72,33 @@ const SEED_USERS: SeedUser[] = [
     role: 'SOLICITANTE',
     collegeType: 'CAG',
     collegeNumber: 'CAG-4521',
+  },
+  // --- Set B (segundo usuario de cada rol) ---
+  {
+    email: 'admin2@permisogt.local',
+    password: 'Admin456!',
+    fullName: 'Luis Administrador',
+    role: 'ADMIN',
+  },
+  {
+    email: 'revisor2@permisogt.local',
+    password: 'Revisor456',
+    fullName: 'María Revisora',
+    role: 'REVISOR',
+  },
+  {
+    email: 'inspector2@permisogt.local',
+    password: 'Inspector456',
+    fullName: 'Pedro Inspector',
+    role: 'INSPECTOR',
+  },
+  {
+    email: 'solicitante2@permisogt.local',
+    password: 'Solicita456',
+    fullName: 'Carlos Ingeniero',
+    role: 'SOLICITANTE',
+    collegeType: 'CIG',
+    collegeNumber: 'CIG-8832',
   },
 ];
 
