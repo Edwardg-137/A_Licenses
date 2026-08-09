@@ -45,6 +45,7 @@ export default function NuevaSolicitudPage() {
     folio: '',
     libro: '',
     nitPropietario: '',
+    presupuestoEstimadoQ: '',
   });
 
   useEffect(() => {
@@ -107,6 +108,9 @@ export default function NuevaSolicitudPage() {
             folio: form.folio,
             libro: form.libro,
             nitPropietario: form.nitPropietario,
+            ...(form.presupuestoEstimadoQ
+              ? { presupuestoEstimadoQ: Number(form.presupuestoEstimadoQ) }
+              : {}),
           },
         }),
       });
@@ -351,6 +355,26 @@ export default function NuevaSolicitudPage() {
                   onChange={(e) => setForm((f) => ({ ...f, nitPropietario: e.target.value }))}
                   className="mt-1 w-full rounded border px-3 py-2"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">
+                  Presupuesto estimado de obra (Q){' '}
+                  <span className="font-normal text-gray-400">— opcional, documento D-12</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.presupuestoEstimadoQ}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, presupuestoEstimadoQ: e.target.value }))
+                  }
+                  placeholder="Ej. 350000"
+                  className="mt-1 w-full rounded border px-3 py-2"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Se usa para calcular la tasa municipal (base + % sobre presupuesto).
+                </p>
               </div>
             </div>
 

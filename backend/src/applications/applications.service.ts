@@ -191,6 +191,11 @@ export class ApplicationsService {
             },
           },
         },
+        inspections: {
+          orderBy: { createdAt: 'desc' },
+          include: { inspector: { select: { fullName: true } } },
+        },
+        payment: true,
       },
     });
     if (!application) throw new NotFoundException('Expediente no encontrado');

@@ -20,6 +20,33 @@ interface CurrentDocument {
   replacedAfterObservation: boolean;
 }
 
+interface InspectionItem {
+  id: string;
+  type: string;
+  status: string;
+  proposedDates: string[];
+  confirmedDate: string | null;
+  result: string | null;
+  resultNote: string | null;
+  createdAt: string;
+  inspector: { fullName: string } | null;
+}
+
+interface PaymentInfo {
+  id: string;
+  amount: string;
+  breakdown: {
+    base?: number;
+    porcentajePresupuesto?: number;
+    presupuestoEstimadoQ?: number;
+    cargoVariable?: number;
+    total?: number;
+    nota?: string;
+  };
+  simulated: boolean;
+  confirmedAt: string | null;
+}
+
 interface ApplicationDetail {
   id: string;
   status: string;
@@ -48,7 +75,23 @@ interface ApplicationDetail {
   };
   documents: CurrentDocument[];
   observations: ObservationItem[];
+  inspections: InspectionItem[];
+  payment: PaymentInfo | null;
 }
+
+const INSPECTION_TYPE_LABEL: Record<string, string> = {
+  ALINEACION: 'Alineación territorial',
+  INTERMEDIA: 'Inspección intermedia',
+  RECEPCION_OBRA: 'Recepción de obra',
+};
+
+const INSPECTION_STATUS_LABEL: Record<string, string> = {
+  SOLICITADA: 'Pendiente de propuesta de fechas',
+  FECHAS_PROPUESTAS: 'Fechas propuestas — esperando solicitante',
+  CONFIRMADA: 'Visita confirmada',
+  REALIZADA: 'Realizada',
+  CANCELADA: 'Cancelada',
+};
 
 const REVIEW_BADGE: Record<string, string> = {
   CONFORME: 'bg-green-100 text-green-800',
@@ -195,6 +238,42 @@ export default function RevisorExpedientePage() {
   }
 
   const docByRequirement = new Map(detail?.documents.map((d) => [d.requirementId, d]));
+
+  async function onRequestAlineacion() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/applications/${params.id}/inspections`, { method: 'POST' });
+      await load();
+      setNotice('Inspección de alineación solicitada. Los inspectores fueron notificados.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onConfirmPayment() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/applications/${params.id}/confirm-payment`, { method: 'POST' });
+      await load();
+      setNotice('Pago confirmado. El expediente avanza a emisión de licencia.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const activeAlineacion = detail?.inspections.some(
+    (i) =>
+      i.type === 'ALINEACION' &&
+      ['SOLICITADA', 'FECHAS_PROPUESTAS', 'CONFIRMADA'].includes(i.status),
+  );
 
   return (
     <div className="min-h-screen">
@@ -493,6 +572,107 @@ export default function RevisorExpedientePage() {
                 </div>
               )}
             </section>
+
+            {/* Alineación territorial */}
+            {detail.status === 'ALINEACION_PROGRAMADA' && canReview && (
+              <section className="mt-6 rounded-lg border border-purple-200 bg-purple-50 p-6">
+                <h2 className="text-lg font-semibold text-purple-900">Alineación territorial</h2>
+                <p className="mt-1 text-sm text-purple-800">
+                  La revisión técnica fue aprobada. Solicite la inspección de alineación para
+                  coordinar la visita al predio.
+                </p>
+                <button
+                  onClick={onRequestAlineacion}
+                  disabled={busy || activeAlineacion}
+                  title={activeAlineacion ? 'Ya existe una inspección activa' : ''}
+                  className="mt-3 rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  📍 Solicitar inspección de alineación
+                </button>
+              </section>
+            )}
+
+            {/* Pago */}
+            {detail.status === 'PENDIENTE_DE_PAGO' && (
+              <section className="mt-6 rounded-lg border border-yellow-300 bg-yellow-50 p-6">
+                <h2 className="text-lg font-semibold text-yellow-900">Cobro de tasa municipal</h2>
+                {detail.payment ? (
+                  <div className="mt-2 text-sm text-yellow-900">
+                    <p>
+                      Monto calculado:{' '}
+                      <strong>Q {Number(detail.payment.amount).toFixed(2)}</strong>{' '}
+                      {detail.payment.simulated && (
+                        <span className="ml-1 rounded bg-orange-200 px-2 py-0.5 text-xs font-medium text-orange-900">
+                          SIMULACIÓN
+                        </span>
+                      )}
+                    </p>
+                    {detail.payment.confirmedAt ? (
+                      <p className="mt-1 text-green-800">
+                        ✓ Pago confirmado el{' '}
+                        {new Date(detail.payment.confirmedAt).toLocaleString('es-GT')}
+                      </p>
+                    ) : canReview ? (
+                      <button
+                        onClick={onConfirmPayment}
+                        disabled={busy}
+                        className="mt-3 rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        ✓ Confirmar recepción del pago
+                      </button>
+                    ) : (
+                      <p className="mt-1 text-xs text-yellow-700">
+                        Esperando confirmación del pago por revisor/admin.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-yellow-800">
+                    Aún no hay cobro calculado para este expediente.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Historial de inspecciones */}
+            {detail.inspections.length > 0 && (
+              <section className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold">Inspecciones</h2>
+                <ul className="mt-3 space-y-3">
+                  {detail.inspections.map((insp) => (
+                    <li key={insp.id} className="rounded border border-gray-200 bg-gray-50 p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">{INSPECTION_TYPE_LABEL[insp.type] ?? insp.type}</p>
+                        <span className="text-xs text-gray-500">
+                          {INSPECTION_STATUS_LABEL[insp.status] ?? insp.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Inspector: {insp.inspector?.fullName ?? 'sin asignar'} · solicitada el{' '}
+                        {new Date(insp.createdAt).toLocaleDateString('es-GT')}
+                      </p>
+                      {insp.confirmedDate && (
+                        <p className="mt-1 text-xs text-gray-700">
+                          Fecha confirmada:{' '}
+                          {new Date(insp.confirmedDate).toLocaleString('es-GT')}
+                        </p>
+                      )}
+                      {insp.result && (
+                        <p
+                          className={`mt-2 rounded px-2 py-1 text-xs font-medium ${
+                            insp.result === 'CONFORME'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {insp.result === 'CONFORME' ? '✅' : '❌'} {insp.result}: {insp.resultNote}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {detail.status === 'RECHAZADO' && detail.rejectedReason && (
               <section className="mt-6 rounded-lg border border-red-300 bg-red-50 p-6">

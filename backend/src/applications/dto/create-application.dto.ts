@@ -53,6 +53,12 @@ export class ProjectFormDataDto {
   @IsString()
   @IsNotEmpty({ message: 'El NIT del propietario es obligatorio' })
   nitPropietario!: string;
+
+  /** Presupuesto estimado de obra en quetzales (documento D-12); alimenta la fórmula de la tasa F08. */
+  @IsOptional()
+  @IsNumber({}, { message: 'El presupuesto estimado debe ser numérico' })
+  @Min(0, { message: 'El presupuesto estimado no puede ser negativo' })
+  presupuestoEstimadoQ?: number;
 }
 
 export class CreateApplicationDto {

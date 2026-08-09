@@ -13,7 +13,7 @@ interface NavLink {
 const NAV_BY_ROLE: Record<string, NavLink[]> = {
   SOLICITANTE: [{ href: '/solicitante', label: 'Mis expedientes' }],
   REVISOR: [{ href: '/revisor', label: 'Bandeja de expedientes' }],
-  INSPECTOR: [],
+  INSPECTOR: [{ href: '/inspector', label: 'Agenda de inspecciones' }],
   ADMIN: [
     { href: '/admin/usuarios', label: 'Usuarios' },
     { href: '/revisor', label: 'Expedientes' },

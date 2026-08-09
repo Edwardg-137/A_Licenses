@@ -20,6 +20,7 @@ const UPLOAD_ALLOWED_STATES: ApplicationStatus[] = [
   'BORRADOR',
   'OBSERVADO_FORMATO',
   'EN_CORRECCION',
+  'PENDIENTE_DE_PAGO', // solo requisitos de etapa PAGO (ver upload)
 ];
 
 /**
@@ -85,6 +86,20 @@ export class DocumentsService {
     });
     if (!requirement) {
       throw new NotFoundException('El requisito no pertenece a este tipo de licencia');
+    }
+
+    // En PENDIENTE_DE_PAGO solo se aceptan requisitos de etapa PAGO (D-15);
+    // los documentos de ingreso quedan bloqueados (03-flujo §4)
+    if (application.status === 'PENDIENTE_DE_PAGO') {
+      if (requirement.stage !== 'PAGO') {
+        throw new BadRequestException(
+          'En esta etapa solo se puede cargar el comprobante de pago (D-15)',
+        );
+      }
+    } else if (requirement.stage === 'PAGO') {
+      throw new BadRequestException(
+        'El comprobante de pago (D-15) se carga cuando el expediente está en PENDIENTE_DE_PAGO',
+      );
     }
 
     // En EN_CORRECCION solo se pueden reemplazar los documentos observados

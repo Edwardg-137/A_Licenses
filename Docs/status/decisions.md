@@ -93,3 +93,21 @@
   4. El rechazo con dictamen (mín. 20 caracteres) está disponible en cualquier ronda, no solo la final, para casos inviables desde el inicio.
 - **Justificación:** Coherencia del historial de rondas (ninguna observación queda "colgada") y fidelidad al flujo aprobado, sin impedir rechazos tempranos fundamentados.
 - **Consecuencias:** El estado `ALINEACION_PROGRAMADA` solo se alcanza con expediente completamente conforme. El reenvío del solicitante exige que ningún documento vigente siga marcado (los reemplazos nacen como `PENDIENTE`).
+
+## D-011 — Observaciones generales (sin documento) no bloquean la aprobación
+
+- **Fecha:** 2026-08-09
+- **Contexto:** En Fase 4, una alineación NO_CONFORME crea una `Observation` sin documento (es del expediente completo). D-010 exige cero observaciones sin resolver para aprobar, pero una observación general no tiene forma manual de resolverse (no hay documento que marcar como conforme).
+- **Problema:** Con la regla original, el expediente quedaría atascado tras una alineación no conforme.
+- **Decisión:** `approve-review` exige cero pendientes **documentales** (`documentId != null`); las observaciones **generales** (`documentId = null`) no bloquean y se resuelven automáticamente al aprobar la revisión siguiente (el revisor las da por atendidas al re-aprobar). Se muestran con etiqueta "General" en el historial.
+- **Justificación:** El revisor siempre las ve en el historial antes de aprobar; forzar una resolución manual sin artefacto asociado añadiría fricción sin valor.
+- **Consecuencias:** El ciclo "alineación no conforme → revisión → re-aprobación → nueva inspección" funciona sin estados muertos. La regla queda como extensión de D-010.
+
+## D-012 — El documento D-15 vigente es la fuente de verdad del comprobante de pago
+
+- **Fecha:** 2026-08-09
+- **Contexto:** Hay dos vías de pago (D-004): pago simulado (genera PDF y lo adjunta) o comprobante externo subido como D-15. `Payment.receiptPath` solo lo fija la vía simulada.
+- **Problema:** Confirmar el pago exigiendo `receiptPath` hacía imposible confirmar pagos con comprobante externo (detectado en la verificación E2E).
+- **Decisión:** La confirmación de pago exige que exista el **documento D-15 vigente** en el expediente (no el campo `receiptPath`). Si el comprobante fue externo, `receiptPath` se rellena desde el `storagePath` del documento al confirmar.
+- **Justificación:** Una sola regla para ambas vías; el expediente documental sigue siendo la referencia completa.
+- **Consecuencias:** `Payment.receiptPath` queda como copia de conveniencia. El revisor puede ver el D-15 desde el expediente antes de confirmar.

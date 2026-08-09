@@ -20,7 +20,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 | Fase 1 — Autenticación y gestión de usuarios | ✅ Completada y verificada |
 | Fase 2 — Expediente, clasificación y documentos | ✅ Completada y verificada |
 | Fase 3 — Revisión, observaciones y correcciones | ✅ Completada y verificada |
-| Fase 4 — Alineación, pago (simulado) e inspección final | ⬜ No iniciada |
+| Fase 4 — Alineación, pago (simulado) e inspección final | ✅ Completada y verificada |
 | Fase 5 — Emisión de licencia (PDF + QR) | ⬜ No iniciada |
 | Fase 6 — Dashboard y pulido | ⬜ No iniciada |
 
@@ -34,7 +34,11 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Expedientes:** creación con clasificación automática F08 (vivienda unifamiliar ≤ 700 m², fuera de Centro Histórico), formulario del proyecto, carga de documentos con validación de MIME **por contenido** (detección de archivos falsos), versionado por reemplazo, "Verificar antes de enviar", envío con transición `BORRADOR → OBSERVADO_FORMATO / EN_REVISION_TECNICA`.
 - **Documentos:** almacenamiento en disco local con nombres UUID (decisión D-007), descarga/preview autenticado con streaming; PDF/JPG se abren en pestaña nueva, **DWG solo descarga** (conversión a imagen pendiente de un servicio conversor externo).
 - **Revisión técnica (ciclo de correcciones):** el revisor marca cada documento ✅ Conforme / ⚠️ Con observación / ❌ Requiere reemplazo, con texto y prioridad (Alta/Media/Baja); envía a corrección (`EN_CORRECCION`); el solicitante solo puede reemplazar los documentos observados y reenvía; el revisor distingue en verde los documentos reemplazados; máximo de rondas configurable (3 por defecto), en la ronda final solo cabe aprobar (`ALINEACION_PROGRAMADA`) o rechazar con dictamen (`RECHAZADO`). Historial de rondas visible para ambas partes (decisión D-010).
-- **Notificaciones in-app:** envío de expediente, observación por formato, expediente en revisión, asignación de revisor, envío a corrección, correcciones recibidas, aprobación técnica y rechazo. Correo electrónico pendiente (decisión D-003).
+- **Alineación territorial:** el revisor solicita la inspección; el inspector propone hasta 3 fechas desde su agenda; el solicitante confirma una; el inspector registra el resultado con nota y **foto obligatoria**. Conforme → `PENDIENTE_DE_PAGO`; no conforme → regresa a `EN_REVISION_TECNICA` con observación general (D-011).
+- **Pago de tasa municipal (F08):** cálculo automático configurable (`base + % sobre presupuesto estimado`, fórmula en `LicenseType.feeFormula`); vista con desglose; **pago en línea simulado** (banner de simulación) que genera comprobante PDF adjunto como D-15, o carga de comprobante externo; confirmación por revisor/Admin (D-012) → `LICENCIA_EMITIDA` (PDF de la licencia en Fase 5).
+- **Recepción de obra:** el solicitante la solicita tras la emisión; mismo ciclo de agenda; resultado conforme → expediente `CERRADO`; no conforme → permanece en recepción con nota.
+- **Agenda del inspector** (`/inspector`): solicitudes pendientes, propuesta de fechas, registro de resultado con evidencia fotográfica.
+- **Notificaciones in-app:** envío de expediente, observaciones, correcciones, aprobación, rechazo, inspección solicitada/fechas propuestas/visita confirmada, alineación conforme con monto, pago confirmado y resultado de recepción. Correo electrónico pendiente (decisión D-003).
 - **Auditoría:** cada creación, carga/reemplazo de documento, envío y asignación queda en `AuditLog` inmutable.
 - **Seed:** tenant "Municipalidad de Guatemala", usuarios de prueba de cada rol, y tipo de licencia L-01 con los 15 requisitos documentales (D-01…D-15; D-15 con etapa `PAGO`).
 
@@ -43,6 +47,9 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - No hay envío real de correos (pendiente; en desarrollo se registrarán en consola).
 - No hay Redis/BullMQ (pospuesto — ver decisión D-003).
 - La fórmula de la tasa F08 usa valores provisionales en el seed; el arancel real está pendiente de conseguirse.
+- El comprobante de pago simulado es un PDF mínimo generado en código (sin librería); la licencia formal con QR llega en Fase 5.
+- El certificado de recepción de obra como documento descargable queda fuera del MVP (el resultado conforme cierra el expediente).
+- Las fotos de evidencia de inspección no pasan por validación de MIME por contenido (a diferencia de los documentos del expediente, D-009).
 - El tenant es único (slug `guatemala` desde `.env`); el multi-municipio activo es de fase posterior.
 
 ## Tecnologías
@@ -85,8 +92,8 @@ Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol:
 | :--- | :--- | :--- | :--- |
 | Administrador | `admin@permisogt.local` | `Admin123!` | Panel de usuarios: aprobar solicitantes, crear Revisores/Inspectores, activar/desactivar |
 | Revisor Municipal | `revisor@permisogt.local` | `Revisor123` | Bandeja con filtros; revisión documental (✅/⚠️/❌ con texto y prioridad), enviar a corrección, aprobar técnicamente o rechazar con dictamen |
-| Inspector | `inspector@permisogt.local` | `Inspector123` | (Su agenda de visitas llega en la Fase 4) |
-| Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión; atender observaciones (reemplazar solo documentos observados) y reenviar correcciones |
+| Inspector | `inspector@permisogt.local` | `Inspector123` | Agenda de inspecciones: proponer fechas, registrar resultado con foto (alineación y recepción de obra) |
+| Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión; atender observaciones; confirmar fecha de visita; pagar (simulado o comprobante externo); solicitar recepción de obra |
 
 Adicionalmente existen dos cuentas creadas durante las pruebas de la Fase 1: `arquitecto@test.gt` (Solicitante, contraseña `Secreto123`) y `revisor@muniguate.gt` (Revisor, contraseña `Revisor123`).
 

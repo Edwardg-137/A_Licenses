@@ -172,10 +172,13 @@ export class ReviewService {
     const application = await this.getInReview(user.tenantId, applicationId);
     const round = this.currentRound(application);
 
-    // La aprobación exige que no quede ninguna observación sin resolver, de
-    // cualquier ronda: cada documento observado debe confirmarse como conforme.
+    // La aprobación exige que no quede ninguna observación DOCUMENTAL sin
+    // resolver, de cualquier ronda: cada documento observado debe confirmarse
+    // como conforme. Las observaciones GENERALES (p. ej. alineación no
+    // conforme, documentId = null) no bloquean: se consideran atendidas al
+    // re-aprobar y se resuelven automáticamente abajo (D-010 + Fase 4).
     const unresolved = await this.prisma.observation.count({
-      where: { applicationId, resolvedAt: null },
+      where: { applicationId, resolvedAt: null, documentId: { not: null } },
     });
     if (unresolved > 0) {
       throw new BadRequestException(
@@ -187,6 +190,12 @@ export class ReviewService {
       this.prisma.application.update({
         where: { id: applicationId },
         data: { status: 'ALINEACION_PROGRAMADA' },
+      }),
+      // Las observaciones generales (sin documento, p. ej. alineación no
+      // conforme) quedan resueltas al aprobar de nuevo la revisión
+      this.prisma.observation.updateMany({
+        where: { applicationId, documentId: null, resolvedAt: null },
+        data: { resolvedAt: new Date() },
       }),
       this.prisma.auditLog.create({
         data: {

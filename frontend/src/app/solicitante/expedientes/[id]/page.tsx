@@ -37,6 +37,34 @@ interface ValidationItem {
   stage: string;
 }
 
+interface InspectionItem {
+  id: string;
+  type: string;
+  status: string;
+  proposedDates: string[];
+  confirmedDate: string | null;
+  result: string | null;
+  resultNote: string | null;
+  createdAt: string;
+  inspector: { fullName: string } | null;
+}
+
+interface PaymentInfo {
+  id: string;
+  amount: string;
+  breakdown: {
+    base?: number;
+    porcentajePresupuesto?: number;
+    presupuestoEstimadoQ?: number;
+    cargoVariable?: number;
+    total?: number;
+    nota?: string;
+  };
+  simulated: boolean;
+  receiptPath: string | null;
+  confirmedAt: string | null;
+}
+
 interface ApplicationDetail {
   id: string;
   status: string;
@@ -53,6 +81,8 @@ interface ApplicationDetail {
   documents: CurrentDocument[];
   observations: ObservationItem[];
   validationReport: ValidationItem[];
+  inspections: InspectionItem[];
+  payment: PaymentInfo | null;
 }
 
 const EDITABLE_STATES = ['BORRADOR', 'OBSERVADO_FORMATO'];
@@ -168,6 +198,54 @@ export default function ExpedienteDetailPage() {
     }
   }
 
+  async function onConfirmDate(inspectionId: string, date: string) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/inspections/${inspectionId}/confirm-date`, {
+        method: 'POST',
+        body: JSON.stringify({ date }),
+      });
+      await load();
+      setNotice('Fecha de visita confirmada. El inspector fue notificado.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPaySimulated() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/applications/${params.id}/pay-simulated`, { method: 'POST' });
+      await load();
+      setNotice('Pago simulado registrado. El comprobante quedó adjunto como D-15 y la municipalidad lo confirmará.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRequestRecepcion() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/applications/${params.id}/request-recepcion`, { method: 'POST' });
+      await load();
+      setNotice('Recepción de obra solicitada. Los inspectores fueron notificados.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!detail && !error) {
     return (
       <div className="min-h-screen">
@@ -249,8 +327,20 @@ export default function ExpedienteDetailPage() {
             )}
             {detail.status === 'ALINEACION_PROGRAMADA' && (
               <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
-                ✅ Su expediente fue aprobado técnicamente. El siguiente paso es la visita de
-                alineación territorial, que será programada por la municipalidad.
+                ✅ Su expediente fue aprobado técnicamente. La municipalidad coordinará la visita
+                de alineación territorial; le notificaremos cuando haya fechas propuestas.
+              </div>
+            )}
+            {detail.status === 'RECEPCION_DE_OBRA' && (
+              <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">
+                🏗️ Recepción de obra en curso. El inspector coordinará la visita final; confirme
+                la fecha cuando reciba la propuesta.
+              </div>
+            )}
+            {detail.status === 'CERRADO' && (
+              <div className="mt-4 rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-800">
+                🎉 Recepción de obra conforme: su expediente está cerrado. La obra quedó registrada
+                conforme a los planos aprobados.
               </div>
             )}
             {detail.status === 'RECHAZADO' && (
@@ -260,6 +350,149 @@ export default function ExpedienteDetailPage() {
                   Dictamen: {detail.rejectedReason ?? 'Sin dictamen registrado.'}
                 </p>
               </div>
+            )}
+
+            {/* Inspecciones (alineación / recepción de obra) */}
+            {detail.inspections.length > 0 && (
+              <section className="mt-4 rounded-lg border bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold">Visitas de inspección</h2>
+                <ul className="mt-3 space-y-3">
+                  {detail.inspections.map((insp) => (
+                    <li key={insp.id} className="rounded border border-gray-200 p-4 text-sm">
+                      <p className="font-medium">
+                        {insp.type === 'ALINEACION'
+                          ? '📍 Alineación territorial'
+                          : '🏗️ Recepción de obra'}{' '}
+                        <span className="ml-1 text-xs font-normal text-gray-500">
+                          · Inspector: {insp.inspector?.fullName ?? 'por asignar'}
+                        </span>
+                      </p>
+
+                      {insp.status === 'SOLICITADA' && (
+                        <p className="mt-1 text-gray-600">
+                          Esperando que el inspector proponga fechas.
+                        </p>
+                      )}
+
+                      {insp.status === 'FECHAS_PROPUESTAS' && (
+                        <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-3">
+                          <p className="font-medium text-blue-900">
+                            Elija y confirme una de las fechas propuestas:
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {insp.proposedDates.map((d) => (
+                              <button
+                                key={d}
+                                onClick={() => onConfirmDate(insp.id, d)}
+                                disabled={busy}
+                                className="rounded border border-blue-300 bg-white px-3 py-1.5 text-sm text-blue-800 hover:bg-blue-100 disabled:opacity-50"
+                              >
+                                {new Date(d).toLocaleString('es-GT', {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                })}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {insp.status === 'CONFIRMADA' && insp.confirmedDate && (
+                        <p className="mt-2 rounded border border-green-200 bg-green-50 p-2 text-green-800">
+                          ✓ Visita confirmada para el{' '}
+                          {new Date(insp.confirmedDate).toLocaleString('es-GT', {
+                            dateStyle: 'full',
+                            timeStyle: 'short',
+                          })}
+                        </p>
+                      )}
+
+                      {insp.status === 'REALIZADA' && (
+                        <p
+                          className={`mt-2 rounded px-2 py-1 ${
+                            insp.result === 'CONFORME'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {insp.result === 'CONFORME' ? '✅' : '❌'} Resultado:{' '}
+                          <strong>{insp.result}</strong> — {insp.resultNote}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Pago de la tasa municipal */}
+            {detail.status === 'PENDIENTE_DE_PAGO' && detail.payment && (
+              <section className="mt-4 rounded-lg border border-yellow-300 bg-yellow-50 p-6">
+                <h2 className="text-lg font-semibold text-yellow-900">Pago de tasa municipal</h2>
+                <div className="mt-3 rounded border border-orange-300 bg-orange-100 p-2 text-center text-xs font-bold uppercase tracking-wide text-orange-900">
+                  ⚠ Simulación — sin transacción monetaria real
+                </div>
+                <dl className="mt-3 space-y-1 text-sm text-yellow-900">
+                  <div className="flex justify-between">
+                    <dt>Base (tarifa F08)</dt>
+                    <dd>Q {Number(detail.payment.breakdown.base ?? 0).toFixed(2)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>
+                      Cargo variable ({(Number(detail.payment.breakdown.porcentajePresupuesto ?? 0) * 100).toFixed(2)}%
+                      sobre presupuesto de Q{' '}
+                      {Number(detail.payment.breakdown.presupuestoEstimadoQ ?? 0).toLocaleString('es-GT')})
+                    </dt>
+                    <dd>Q {Number(detail.payment.breakdown.cargoVariable ?? 0).toFixed(2)}</dd>
+                  </div>
+                  <div className="flex justify-between border-t border-yellow-300 pt-1 text-base font-bold">
+                    <dt>Total a pagar</dt>
+                    <dd>Q {Number(detail.payment.amount).toFixed(2)}</dd>
+                  </div>
+                </dl>
+
+                {detail.payment.confirmedAt ? (
+                  <p className="mt-3 rounded bg-green-100 p-2 text-sm text-green-800">
+                    ✓ Pago confirmado por la municipalidad el{' '}
+                    {new Date(detail.payment.confirmedAt).toLocaleString('es-GT')}
+                  </p>
+                ) : detail.payment.receiptPath ? (
+                  <p className="mt-3 rounded bg-blue-100 p-2 text-sm text-blue-800">
+                    Comprobante registrado (D-15). La municipalidad confirmará su pago.
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={onPaySimulated}
+                      disabled={busy}
+                      className="rounded bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      💳 Pagar en línea (simulado)
+                    </button>
+                    <span className="text-xs text-yellow-800">
+                      o suba abajo el comprobante externo (D-15) si pagó en caja municipal
+                    </span>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Licencia emitida → recepción de obra */}
+            {detail.status === 'LICENCIA_EMITIDA' && (
+              <section className="mt-4 rounded-lg border border-green-300 bg-green-50 p-6">
+                <h2 className="text-lg font-semibold text-green-900">🎉 Licencia emitida</h2>
+                <p className="mt-1 text-sm text-green-800">
+                  Su pago fue confirmado y la licencia está emitida. El documento oficial (PDF con
+                  QR de verificación) estará disponible en la siguiente fase de la plataforma.
+                </p>
+                <button
+                  onClick={onRequestRecepcion}
+                  disabled={busy}
+                  className="mt-3 rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                >
+                  🏗️ Solicitar recepción de obra (al finalizar la construcción)
+                </button>
+              </section>
             )}
 
             {/* Datos del proyecto */}
@@ -356,9 +589,15 @@ export default function ExpedienteDetailPage() {
                   const isPagoStage = req.stage === 'PAGO';
                   const marked =
                     doc && ['CON_OBSERVACION', 'REQUIERE_REEMPLAZO'].includes(doc.reviewStatus);
+                  const pagoUploadable =
+                    isPagoStage &&
+                    detail.status === 'PENDIENTE_DE_PAGO' &&
+                    !detail.payment?.confirmedAt;
                   const canUpload =
-                    !isPagoStage &&
-                    ((editable && !inCorrection) || (inCorrection && marked));
+                    pagoUploadable ||
+                    (!isPagoStage &&
+                      detail.status !== 'PENDIENTE_DE_PAGO' &&
+                      ((editable && !inCorrection) || (inCorrection && marked)));
                   return (
                     <li
                       key={req.id}

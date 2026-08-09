@@ -24,25 +24,13 @@ export default function HomePage() {
       case 'REVISOR':
         router.replace('/revisor');
         break;
+      case 'INSPECTOR':
+        router.replace('/inspector');
+        break;
       default:
-        // INSPECTOR: su agenda llega en la Fase 4
         break;
     }
   }, [user, router]);
-
-  if (user && user.role === 'INSPECTOR') {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="max-w-md rounded-lg border bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-semibold">Hola, {user.fullName}</h1>
-          <p className="mt-2 text-gray-600">
-            Su cuenta está activa. La agenda de inspecciones estará disponible en
-            una siguiente fase del MVP.
-          </p>
-        </div>
-      </main>
-    );
-  }
 
   return null;
 }
