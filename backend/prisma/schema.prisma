@@ -1,0 +1,341 @@
+// Modelo de datos completo del MVP de PermisoGT.
+// Multi-tenant por columna tenantId (ver Docs/status/decisions.md — D-002).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum UserRole {
+  SOLICITANTE
+  REVISOR
+  INSPECTOR
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  PENDING_APPROVAL // Solicitante registrado, pendiente de aprobación manual del Admin (MVP)
+  ACTIVE
+  DISABLED
+}
+
+enum ProfessionalCollege {
+  CIG // Colegio de Ingenieros de Guatemala
+  CAG // Colegio de Arquitectos de Guatemala
+}
+
+// Estados del expediente según mvp_docs/03-flujo-expediente-digital.md
+enum ApplicationStatus {
+  BORRADOR
+  EN_VALIDACION
+  OBSERVADO_FORMATO
+  EN_REVISION_TECNICA
+  EN_CORRECCION
+  ALINEACION_PROGRAMADA
+  PENDIENTE_DE_PAGO
+  LICENCIA_EMITIDA
+  RECHAZADO
+  RECEPCION_DE_OBRA
+  CERRADO
+}
+
+enum DocumentReviewStatus {
+  PENDIENTE
+  CONFORME
+  CON_OBSERVACION
+  REQUIERE_REEMPLAZO
+}
+
+enum ObservationPriority {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum InspectionType {
+  ALINEACION
+  INTERMEDIA
+  RECEPCION_OBRA
+}
+
+enum InspectionStatus {
+  SOLICITADA
+  FECHAS_PROPUESTAS
+  CONFIRMADA
+  REALIZADA
+  CANCELADA
+}
+
+enum InspectionResult {
+  CONFORME
+  NO_CONFORME
+  REQUIERE_SEGUIMIENTO
+}
+
+// ─────────────────────────── Modelos ───────────────────────────
+
+model Tenant {
+  id        String   @id @default(uuid())
+  slug      String   @unique // ej. "guatemala"
+  name      String // ej. "Municipalidad de Guatemala"
+  active    Boolean  @default(true)
+  // Configuración flexible: fórmula de tasa, máximo de rondas, textos, etc.
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  licenseTypes LicenseType[]
+  applications Application[]
+  auditLogs    AuditLog[]
+  notifications Notification[]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         UserRole
+  status       UserStatus @default(PENDING_APPROVAL)
+
+  // Solo para SOLICITANTE (profesional colegiado)
+  collegeType   ProfessionalCollege?
+  collegeNumber String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  refreshTokens RefreshToken[]
+  applications  Application[]  @relation("ApplicantApplications")
+  reviewing     Application[]  @relation("ReviewerApplications")
+  inspections   Inspection[]
+  observations  Observation[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role, status])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique // SHA-256 del token; nunca se guarda en claro
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Tipos de licencia configurables por el Admin (L-01 en el MVP)
+model LicenseType {
+  id                  String  @id @default(uuid())
+  tenantId            String
+  code                String // ej. "L-01"
+  name                String // ej. "Obra Mayor — Vivienda Unifamiliar"
+  formCode            String // ej. "F08"
+  active              Boolean @default(true)
+  maxCorrectionRounds Int     @default(3)
+  // Fórmula de tasa: { "base": number, "porcentajePresupuesto": number }
+  feeFormula          Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id])
+  requirements DocumentRequirement[]
+  applications Application[]
+
+  @@unique([tenantId, code])
+}
+
+// Requisitos documentales por tipo de licencia (D-01 … D-15 para L-01)
+model DocumentRequirement {
+  id            String   @id @default(uuid())
+  licenseTypeId String
+  code          String // ej. "D-01"
+  name          String // ej. "DPI del propietario (ambas caras)"
+  helpText      String? // descripción de ayuda para el solicitante
+  // MIME types aceptados, ej. ["application/pdf", "image/jpeg"]
+  allowedMimeTypes String[]
+  required      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+
+  licenseType LicenseType           @relation(fields: [licenseTypeId], references: [id], onDelete: Cascade)
+  documents   ApplicationDocument[]
+
+  @@unique([licenseTypeId, code])
+}
+
+// Expediente digital
+model Application {
+  id            String            @id @default(uuid())
+  tenantId      String
+  licenseTypeId String
+  applicantId   String
+  reviewerId    String?
+  status        ApplicationStatus @default(BORRADOR)
+  // Formulario municipal determinado por la clasificación (F08 en el MVP)
+  formCode      String            @default("F08")
+
+  // Datos del proyecto (formulario 04-tipos-licencia §2.2):
+  // dirección, zona, m², niveles, uso, finca/folio/libro, NIT, colegiado...
+  formData Json @default("{}")
+
+  correctionRound Int       @default(0)
+  rejectedReason  String? // dictamen en caso de rechazo
+  submittedAt     DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id])
+  licenseType LicenseType           @relation(fields: [licenseTypeId], references: [id])
+  applicant   User                  @relation("ApplicantApplications", fields: [applicantId], references: [id])
+  reviewer    User?                 @relation("ReviewerApplications", fields: [reviewerId], references: [id])
+  documents   ApplicationDocument[]
+  observations Observation[]
+  inspections Inspection[]
+  payment     Payment?
+  license     License?
+  auditLogs   AuditLog[]
+
+  @@index([tenantId, status])
+  @@index([applicantId])
+  @@index([reviewerId])
+}
+
+// Documento cargado para un requisito; se versiona en cada reemplazo
+model ApplicationDocument {
+  id            String               @id @default(uuid())
+  applicationId String
+  requirementId String
+  version       Int                  @default(1)
+  isCurrent     Boolean              @default(true)
+  fileName      String
+  storagePath   String // ruta en almacenamiento (disco local en dev, S3/MinIO en prod)
+  mimeType      String
+  sizeBytes     Int
+  reviewStatus  DocumentReviewStatus @default(PENDIENTE)
+  uploadedAt    DateTime             @default(now())
+
+  application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  requirement DocumentRequirement @relation(fields: [requirementId], references: [id])
+  observations Observation[]
+
+  @@index([applicationId, requirementId, isCurrent])
+}
+
+// Observación del revisor vinculada a un documento (o general al expediente)
+model Observation {
+  id            String              @id @default(uuid())
+  applicationId String
+  documentId    String?
+  authorId      String
+  round         Int
+  priority      ObservationPriority @default(MEDIA)
+  text          String
+  resolvedAt    DateTime?
+  createdAt     DateTime            @default(now())
+
+  application Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  document    ApplicationDocument? @relation(fields: [documentId], references: [id])
+  author      User                 @relation(fields: [authorId], references: [id])
+
+  @@index([applicationId, round])
+}
+
+model Inspection {
+  id            String           @id @default(uuid())
+  applicationId String
+  inspectorId   String?
+  type          InspectionType
+  status        InspectionStatus @default(SOLICITADA)
+  proposedDates DateTime[] // hasta 3 fechas propuestas por el inspector
+  confirmedDate DateTime?
+  result        InspectionResult?
+  resultNote    String?
+  photoPaths    String[] // evidencia fotográfica (obligatoria para alineación)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  inspector   User?       @relation(fields: [inspectorId], references: [id])
+
+  @@index([inspectorId, status])
+  @@index([applicationId])
+}
+
+model Payment {
+  id            String    @id @default(uuid())
+  applicationId String    @unique
+  amount        Decimal   @db.Decimal(12, 2)
+  breakdown     Json      @default("{}") // desglose del cálculo (base, %, presupuesto)
+  simulated     Boolean   @default(true) // MVP: pago en línea simulado (decisión D-004)
+  receiptPath   String? // comprobante (generado por la simulación o subido)
+  confirmedById String?
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id            String    @id @default(uuid())
+  applicationId String    @unique
+  number        String    @unique // correlativo único, ej. "LC-GT-2026-000123"
+  qrToken       String    @unique // token de la URL pública de verificación
+  pdfPath       String
+  issuedAt      DateTime  @default(now())
+  validUntil    DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id            String    @id @default(uuid())
+  tenantId      String
+  userId        String
+  applicationId String?
+  title         String
+  body          String
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+// Log inmutable de auditoría por expediente (solo INSERT, nunca UPDATE/DELETE)
+model AuditLog {
+  id            String   @id @default(uuid())
+  tenantId      String
+  applicationId String?
+  userId        String?
+  action        String // descripción, ej. "Documento D-11 marcado como Requiere Reemplazo — Ronda 1"
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus?
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  user        User?        @relation(fields: [userId], references: [id])
+
+  @@index([applicationId, createdAt])
+}

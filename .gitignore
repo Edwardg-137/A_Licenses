@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+
+# Ambiente
+.env
+.env.local
+.env.*.local
+
+# Prisma
+backend/prisma/migrations/dev.db*
+
+# Archivos subidos en desarrollo
+backend/uploads/
+
+# Logs y temporales
+*.log
+.DS_Store
+Thumbs.db
+
+# Documentos  internos
+context_tramits/
+mpv_docs/
+status/
+general_instructions/
