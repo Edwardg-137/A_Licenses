@@ -16,9 +16,97 @@ El MVP cubre la licencia **L-01 Obra Mayor — Vivienda Unifamiliar** (formulari
 
 ---
 
-## Requisitos previos (qué instalar antes)
+## Arranque rápido con Docker (recomendado)
 
-Necesitas estas herramientas en tu máquina. Las instrucciones siguientes están pensadas para **Windows 10/11** (entorno de desarrollo del proyecto). Si usas macOS o Linux, los conceptos son los mismos; cambia solo la forma de instalar.
+Si tienes **Docker Desktop** instalado y en ejecución, no necesitas instalar PostgreSQL ni Node en el host para *usar* la aplicación.
+
+### 1. Instalar Docker Desktop (si aún no lo tienes)
+
+1. Ve a: https://www.docker.com/products/docker-desktop/  
+2. Descarga **Docker Desktop for Windows**.  
+3. Instálalo y reinicia si el instalador lo pide.  
+4. Abre Docker Desktop y espera a que diga que el motor está en marcha.  
+5. Verifica en PowerShell:
+
+```powershell
+docker --version
+docker compose version
+docker ps
+```
+
+### 2. Clonar el repositorio
+
+```powershell
+git clone https://github.com/Edwardg-137/A_Licenses.git
+cd A_Licenses
+```
+
+(Si ya tienes la carpeta del proyecto, `cd` a ella.)
+
+### 3. Variables de entorno (opcional)
+
+```powershell
+copy .env.example .env
+```
+
+Los valores por defecto sirven para desarrollo local. Ajusta secretos JWT si quieres.
+
+### 4. Liberar puertos
+
+Por defecto Compose usa:
+
+| Puerto host | Servicio |
+| :--- | :--- |
+| `3000` | Portal web |
+| `3001` | API |
+| `5433` | PostgreSQL (evita chocar con Postgres local en `5432`) |
+
+Si `3000` o `3001` están ocupados por un `npm run dev` previo, ciérralos o cambia `FRONTEND_PORT` / `BACKEND_PORT` en `.env`.
+
+### 5. Construir y levantar
+
+```powershell
+docker compose up --build
+```
+
+La primera vez tarda varios minutos (descarga de imágenes y build). El backend aplica migraciones y el seed automáticamente (`RUN_SEED=true`).
+
+### 6. Abrir el portal
+
+- Portal: **http://localhost:3000**  
+- API: **http://localhost:3001/api**
+
+Credenciales de prueba: ver sección más abajo.
+
+Detener:
+
+```powershell
+docker compose down
+```
+
+Borrar también los datos de la base (reset total):
+
+```powershell
+docker compose down -v
+```
+
+Solo base de datos (para desarrollar Nest/Next en el host):
+
+```powershell
+docker compose up db -d
+```
+
+En ese caso, en `backend/.env` usa:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/permisogt?schema=public"
+```
+
+---
+
+## Requisitos previos (modo nativo, sin Docker completo)
+
+Si prefieres correr Node en el host (o no usar contenedores para la API/portal), instala lo siguiente. Las instrucciones están pensadas para **Windows 10/11**.
 
 ### 1. Git (para clonar el repositorio)
 
@@ -52,41 +140,36 @@ Ejemplo esperado: `v20.x.x` y `10.x.x` (u otra versión compatible).
 
 > **Nota:** No hace falta instalar Yarn ni pnpm; este proyecto usa `npm`.
 
-### 3. PostgreSQL 16 (base de datos)
+### 3. PostgreSQL 16 (base de datos) — solo si no usas el servicio `db` de Compose
 
-El proyecto **no usa Docker**. PostgreSQL se instala de forma nativa en Windows.
+Puedes usar **Docker solo para Postgres** (`docker compose up db -d`, puerto **5433**) o instalar PostgreSQL nativo.
 
-#### Opción recomendada — winget (Windows Package Manager)
+#### Opción A — Postgres con Docker (híbrido)
 
-1. Abre PowerShell **como usuario normal** (o administrador si winget lo pide).  
-2. Ejecuta:
+```powershell
+docker compose up db -d
+```
+
+`DATABASE_URL` → `postgresql://postgres:postgres@localhost:5433/permisogt?schema=public`
+
+#### Opción B — Instalación nativa (winget)
 
 ```powershell
 winget install -e --id PostgreSQL.PostgreSQL.16
 ```
 
-3. Durante la instalación te pedirá una **contraseña para el usuario `postgres`**. Anótala. En la documentación de desarrollo del proyecto se asume a menudo `postgres` / `postgres`; si eliges otra, deberás reflejarla en `DATABASE_URL` (paso de configuración).
+Durante la instalación anota la contraseña del usuario `postgres`. Puerto típico: `5432`.
 
-#### Opción alternativa — instalador oficial
+#### Opción C — Instalador oficial
 
 1. Ve a: https://www.postgresql.org/download/windows/  
-2. Usa el instalador de EnterpriseDB / el enlace oficial.  
-3. Elige la versión **16**.  
-4. Anota puerto (`5432` por defecto) y contraseña del superusuario `postgres`.
+2. Elige la versión **16**.  
+3. Anota puerto (`5432`) y contraseña de `postgres`.
 
-#### Comprobar que el servicio está activo (Windows)
+#### Comprobar servicio nativo (Windows)
 
 1. Abre **Servicios** (`Win + R` → `services.msc`).  
-2. Busca un servicio parecido a `postgresql-x64-16`.  
-3. Debe estar en estado **En ejecución**. Si no, clic derecho → **Iniciar**.
-
-También puedes probar:
-
-```powershell
-psql --version
-```
-
-Si `psql` no está en el PATH, úsalo desde el menú de inicio (“SQL Shell (psql)”) o añade la carpeta `bin` de PostgreSQL al PATH (por ejemplo `C:\Program Files\PostgreSQL\16\bin`).
+2. Busca `postgresql-x64-16` → debe estar **En ejecución**.
 
 ### 4. Navegador web
 
@@ -273,7 +356,19 @@ La app redirige según el rol de la sesión (login, paneles de solicitante/revis
 
 ## Resumen rápido (checklist)
 
-Cuando ya tienes Node, Git y PostgreSQL instalados:
+### Con Docker (recomendado)
+
+```powershell
+git clone https://github.com/Edwardg-137/A_Licenses.git
+cd A_Licenses
+copy .env.example .env
+docker compose up --build
+# http://localhost:3000
+```
+
+### Modo nativo (Node + Postgres)
+
+Cuando ya tienes Node, Git y PostgreSQL (nativo o `docker compose up db -d`):
 
 ```powershell
 # 1) Base de datos (una sola vez)
@@ -365,7 +460,18 @@ Cierra todas las terminales, reinstala Node LTS y abre una terminal nueva. Compr
 
 ### Puerto 3000 o 3001 ocupado
 
-Cierra el proceso que los use, o cambia `PORT` en el backend / arranca Next con otro puerto (`npx next dev -p 3002`) y ajusta `CORS_ORIGIN` y la URL que abras en el navegador.
+Cierra el proceso Node/`next`/`nest` que los use, o define en `.env`:
+
+```env
+FRONTEND_PORT=3002
+BACKEND_PORT=3003
+```
+
+y vuelve a `docker compose up -d`. Si cambias el puerto del frontend, actualiza también `CORS_ORIGIN`.
+
+### Docker: el backend reinicia en bucle
+
+Revisa logs: `docker logs permisogt-backend`. Suele ser la base aún no healthy o un fallo de migrate/seed. Comprueba `docker compose ps` y que `permisogt-db` esté `healthy`.
 
 ### Seed no crea el Set B
 
@@ -382,13 +488,18 @@ Si definiste `SEED_ADMIN_PASSWORD` en `.env` **antes** del primer seed, esa ser�
 ```
 building_permits/
 ├── README.md                 ← esta guía
+├── docker-compose.yml        ← stack Docker (db + API + portal)
+├── .env.example              ← variables del compose
 ├── Docs/                     ← estado, arquitectura, decisiones, changelog
 ├── backend/                  ← API NestJS + Prisma
+│   ├── Dockerfile
+│   ├── docker-entrypoint.sh
 │   ├── prisma/               ← schema, migraciones, seed
 │   ├── src/                  ← código de la API
 │   ├── .env.example
 │   └── uploads/              ← archivos subidos en desarrollo (no versionar)
 └── frontend/                 ← portal Next.js
+    ├── Dockerfile
     ├── src/app/              ← páginas (App Router)
     └── .env.local.example
 ```

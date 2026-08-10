@@ -111,3 +111,12 @@
 - **Decisión:** La confirmación de pago exige que exista el **documento D-15 vigente** en el expediente (no el campo `receiptPath`). Si el comprobante fue externo, `receiptPath` se rellena desde el `storagePath` del documento al confirmar.
 - **Justificación:** Una sola regla para ambas vías; el expediente documental sigue siendo la referencia completa.
 - **Consecuencias:** `Payment.receiptPath` queda como copia de conveniencia. El revisor puede ver el D-15 desde el expediente antes de confirmar.
+
+## D-013 — Docker Compose como forma oficial de levantar el stack
+
+- **Fecha:** 2026-08-09
+- **Contexto:** El entorno se basaba en PostgreSQL instalado en Windows y procesos Node nativos. Docker Desktop quedó disponible en el equipo de desarrollo.
+- **Problema:** Onboarding frágil y poco reproducible; dificulta compartir el mismo entorno vía GitHub.
+- **Decisión:** Añadir `docker-compose.yml` con servicios `db` (Postgres 16), `backend` (NestJS) y `frontend` (Next.js standalone). El puerto host de Postgres es **5433** para no chocar con una instalación local en 5432. Sigue siendo válido el modo híbrido (`docker compose up db -d` + Nest/Next en el host).
+- **Justificación:** Un solo comando reproduce migraciones, seed y arranque; alinea el repo con el despliegue containerizado futuro.
+- **Consecuencias:** Hay que liberar los puertos 3000/3001/5433 (o cambiarlos en `.env`). Redis/BullMQ siguen fuera del MVP (D-003), aunque Docker ya no es el bloqueador. `NEXT_PUBLIC_API_URL` se fija en el **build** de la imagen frontend.

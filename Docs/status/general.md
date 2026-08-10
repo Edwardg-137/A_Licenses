@@ -45,7 +45,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 ### Limitaciones conocidas
 
 - No hay envío real de correos (pendiente; en desarrollo se registrarán en consola).
-- No hay Redis/BullMQ (pospuesto — ver decisión D-003).
+- No hay Redis/BullMQ (pospuesto — ver decisión D-003; Docker ya está disponible — D-013 — pero la cola de correos aún no se implementó).
 - La fórmula de la tasa F08 usa valores provisionales en el seed; el arancel real está pendiente de conseguirse.
 - El comprobante de pago simulado es un PDF mínimo generado en código (sin librería); la licencia formal con QR llega en Fase 5.
 - El certificado de recepción de obra como documento descargable queda fuera del MVP (el resultado conforme cierra el expediente).
@@ -54,16 +54,35 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 
 ## Tecnologías
 
-- **Backend:** NestJS 10 (TypeScript), Prisma 5, PostgreSQL 16 (instalación local de Windows, servicio `postgresql-x64-16`, sin Docker), JWT (passport-jwt), bcryptjs.
-- **Frontend:** Next.js 14 (App Router), React 18, Tailwind CSS 3, Zustand (estado de sesión persistido).
+- **Backend:** NestJS 10 (TypeScript), Prisma 5, PostgreSQL 16, JWT (passport-jwt), bcryptjs.
+- **Frontend:** Next.js 14 (App Router, `output: 'standalone'` para Docker), React 18, Tailwind CSS 3, Zustand (estado de sesión persistido).
+- **Contenedores:** Docker Compose (servicios `db`, `backend`, `frontend`) — decisión D-013. Alternativa: Postgres/Node nativos en Windows.
 
 ## Cómo ejecutar la plataforma
 
-> Guía paso a paso desde cero (instalación de Git, Node.js, PostgreSQL, navegador, configuración y arranque): ver el **[`README.md`](../../README.md)** en la raíz del repositorio.
+> Guía completa: **[`README.md`](../../README.md)** (Docker recomendado y modo nativo).
 
-### En esta máquina (entorno ya configurado)
+### Opción A — Docker Compose (recomendada)
 
-PostgreSQL 16 ya está instalado (servicio `postgresql-x64-16`, credenciales `postgres`/`postgres`), la base `permisogt` ya está migrada y sembrada, y los `.env` ya existen. Solo hay que levantar los dos procesos, cada uno en su terminal:
+Requisitos: [Docker Desktop](https://www.docker.com/products/docker-desktop/) en ejecución. Liberar puertos **3000**, **3001** y **5433** (o ajustar en `.env`).
+
+```powershell
+cd c:\building_permits
+copy .env.example .env   # opcional; hay defaults
+docker compose up --build
+```
+
+Portal: **http://localhost:3000** · API: **http://localhost:3001/api**
+
+Solo base de datos (desarrollo híbrido con Node en el host, `DATABASE_URL` → `localhost:5433`):
+
+```powershell
+docker compose up db -d
+```
+
+### Opción B — En esta máquina (Node + PostgreSQL local ya configurados)
+
+PostgreSQL 16 local (servicio `postgresql-x64-16`, credenciales `postgres`/`postgres`), base `permisogt` migrada/sembrada y `.env` existentes:
 
 ```powershell
 # Terminal 1 — API (puerto 3001)

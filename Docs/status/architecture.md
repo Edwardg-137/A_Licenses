@@ -4,16 +4,24 @@
 
 ## Visión general
 
-Monorepo con dos aplicaciones independientes que se comunican por HTTP:
+Monorepo con dos aplicaciones que se comunican por HTTP. En desarrollo se pueden correr de dos formas (decisión D-013):
+
+**A) Docker Compose (recomendada)**
 
 ```
-[Next.js :3000] ──HTTP/JSON──► [NestJS :3001 /api] ──Prisma──► [PostgreSQL local]
+[Navegador] → frontend:3000 → backend:3001/api → db:5432 (Postgres en red Compose)
+                              ↑ puerto host 5433 si se conecta desde el host
 ```
 
-- **Frontend (Next.js, App Router):** páginas cliente (`'use client'`); el estado de sesión vive en Zustand persistido en localStorage.
-- **Backend (NestJS):** API REST con prefijo `/api`, validación global con `class-validator` (`whitelist` + `forbidNonWhitelisted`), CORS restringido al origen del frontend.
+**B) Procesos nativos**
+
+```
+[Next.js :3000] ──HTTP/JSON──► [NestJS :3001 /api] ──Prisma──► [PostgreSQL local :5432]
+```
+
+- **Frontend (Next.js, App Router):** páginas cliente (`'use client'`); el estado de sesión vive en Zustand persistido en localStorage. Build Docker usa `output: 'standalone'`.
+- **Backend (NestJS):** API REST con prefijo `/api`, validación global con `class-validator` (`whitelist` + `forbidNonWhitelisted`), CORS restringido al origen del frontend. En contenedor, el entrypoint aplica `prisma migrate deploy` y el seed si `RUN_SEED=true`.
 - **Base de datos (PostgreSQL):** acceso exclusivo vía Prisma (`PrismaService` global).
-
 ## Multi-tenancy
 
 Aislamiento por **columna `tenantId`** en todas las tablas de negocio (decisión D-002). En el MVP existe un único tenant (slug `guatemala`, configurado en `DEFAULT_TENANT_SLUG`); todos los servicios filtran por el `tenantId` del usuario autenticado, nunca por parámetros del cliente.

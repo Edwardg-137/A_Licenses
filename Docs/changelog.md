@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-09 — Docker Compose (db + backend + frontend)
+
+- **Descripción:** Se añadió el stack containerizado oficial: `docker-compose.yml` con PostgreSQL 16 (puerto host 5433), API NestJS y portal Next.js (`output: 'standalone'`). El backend aplica migraciones y seed al arrancar. Documentado como vía recomendada de instalación; el modo nativo Windows sigue disponible.
+- **Documentos:** `implementations/2026-08-docker-compose.md`; `status/general.md`, `status/structure.md`, `status/architecture.md`, `status/decisions.md` (D-013); `README.md`; `.env.example` (raíz).
+- **Verificación:** ✅ Build de imágenes, Postgres healthy, migrate + seed, login JWT OK, frontend HTTP 200.
+- **Impacto:** Onboarding reproducible vía GitHub; no cambia la lógica de negocio del MVP.
+
 ## 2026-08-09 — Segundo set de usuarios de prueba y README de instalación
 
 - **Descripción:** El seed crea ahora dos usuarios ACTIVE por cada rol (Admin, Revisor, Inspector, Solicitante). Se documentaron las credenciales del Set B en `Docs/status/general.md` y se añadió `README.md` en la raíz con una guía detallada de instalación (Git, Node.js, PostgreSQL, clonado, configuración de `.env`, migraciones, seed y arranque de backend/frontend) pensada para que otra persona pueda levantar el proyecto desde cero.

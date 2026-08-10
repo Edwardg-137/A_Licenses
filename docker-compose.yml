@@ -1,0 +1,75 @@
+# PermisoGT — stack completo (db + API + portal)
+#
+# Uso:
+#   docker compose up --build
+# Solo base de datos (desarrollo híbrido con Node en el host):
+#   docker compose up db -d
+#
+# Postgres en el host queda en el puerto 5433 para no chocar con
+# una instalación local típica en 5432.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: permisogt-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-permisogt}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - permisogt_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: permisogt-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-permisogt}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-jwt-access-secret-change-me}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-jwt-refresh-secret-change-me}
+      JWT_REFRESH_EXPIRES_IN_DAYS: ${JWT_REFRESH_EXPIRES_IN_DAYS:-7}
+      PORT: 3001
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      UPLOADS_DIR: ./uploads
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-guatemala}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
+      RUN_SEED: ${RUN_SEED:-true}
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    volumes:
+      - permisogt_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
+    container_name: permisogt-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  permisogt_pgdata:
+  permisogt_uploads:

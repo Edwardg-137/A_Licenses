@@ -8,11 +8,21 @@ c:\building_permits\
 │   ├── status/          → Estado, estructura, arquitectura y decisiones
 │   ├── implementations/ → Planes/historial de cada implementación
 │   └── changelog.md
+├── docker-compose.yml   → Stack Docker: db + backend + frontend (D-013)
+├── .env.example         → Variables para Compose (copiar a `.env` si se personaliza)
 ├── context_tramits/     → Contexto de dominio: trámites de construcción en Guatemala (referencia, no código)
 ├── mvp_docs/            → Propuesta del MVP: visión, roles, flujo, requisitos, plan (referencia)
 ├── backend/             → API REST (NestJS + Prisma + PostgreSQL)
 └── frontend/            → Portal web (Next.js App Router + Tailwind)
 ```
+
+## Raíz (Docker)
+
+| Ruta | Propósito |
+| :--- | :--- |
+| `docker-compose.yml` | Orquesta Postgres 16 (`db`, puerto host 5433), API y portal |
+| `.env.example` | Plantilla de variables del compose (secretos JWT, puertos, `RUN_SEED`, etc.) |
+| `.gitattributes` | Fuerza LF en scripts shell usados dentro de contenedores Linux |
 
 ## backend/
 
@@ -20,6 +30,8 @@ c:\building_permits\
 | :--- | :--- |
 | `prisma/schema.prisma` | Modelo de datos completo del MVP (tenants, usuarios, tipos de licencia, expedientes, documentos, observaciones, inspecciones, pagos, licencias, notificaciones, auditoría) |
 | `prisma/seed.ts` | Seed: tenant Guatemala, 2 usuarios de prueba por cada rol (Admin, Revisor, Inspector, Solicitante), L-01 con requisitos D-01…D-15 |
+| `prisma/tsconfig.json` | tsconfig del seed (CommonJS) para `ts-node` en Docker/local |
+| `Dockerfile` / `docker-entrypoint.sh` | Imagen API: migrate deploy + seed opcional + `node dist/main.js` |
 | `src/main.ts` | Bootstrap: prefijo `/api`, CORS, ValidationPipe global |
 | `src/app.module.ts` | Módulo raíz; registra guards globales (JWT + roles) |
 | `src/prisma/` | `PrismaService` global (conexión a BD) |
@@ -41,6 +53,8 @@ Módulos futuros previstos (fases 5+): `licenses` (PDF + QR), `reports` (dashboa
 | Ruta | Propósito |
 | :--- | :--- |
 | `src/app/layout.tsx` | Layout raíz (idioma es, metadata) |
+| `next.config.mjs` | App Router; `output: 'standalone'` para imagen Docker |
+| `Dockerfile` | Build multi-etapa de la imagen del portal |
 | `src/app/page.tsx` | Redirección según sesión y rol |
 | `src/app/login/` | Inicio de sesión |
 | `src/app/registro/` | Registro de solicitante (profesional colegiado) |
