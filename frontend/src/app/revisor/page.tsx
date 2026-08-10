@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import StatusBadge from '@/components/StatusBadge';
 import { api, ApiError } from '@/lib/api';
@@ -21,15 +21,21 @@ interface ApplicationRow {
   licenseType: { code: string; name: string };
 }
 
-export default function RevisorPage() {
+function RevisorBandeja() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Sincroniza el filtro si se llega desde el dashboard con ?status=
+  useEffect(() => {
+    setStatusFilter(searchParams.get('status') ?? '');
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +66,15 @@ export default function RevisorPage() {
 
   if (!user || !['REVISOR', 'ADMIN'].includes(user.role)) return null;
 
+  function updateStatusFilter(value: string) {
+    setStatusFilter(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set('status', value);
+    else params.delete('status');
+    const qs = params.toString();
+    router.replace(qs ? `/revisor?${qs}` : '/revisor');
+  }
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -69,13 +84,12 @@ export default function RevisorPage() {
           Expedientes de la municipalidad con filtros por estado y fecha.
         </p>
 
-        {/* Filtros */}
         <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4 text-sm">
           <div>
             <label className="block text-xs text-gray-500">Estado</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => updateStatusFilter(e.target.value)}
               className="mt-1 rounded border px-3 py-2"
             >
               <option value="">Todos</option>
@@ -106,9 +120,9 @@ export default function RevisorPage() {
           </div>
           <button
             onClick={() => {
-              setStatusFilter('');
               setFrom('');
               setTo('');
+              updateStatusFilter('');
             }}
             className="rounded border px-3 py-2 hover:bg-gray-100"
           >
@@ -126,41 +140,47 @@ export default function RevisorPage() {
           {loading ? (
             <p className="p-6 text-sm text-gray-500">Cargando…</p>
           ) : applications.length === 0 ? (
-            <p className="p-6 text-sm text-gray-500">
-              No hay expedientes con los filtros seleccionados.
-            </p>
+            <p className="p-6 text-sm text-gray-500">No hay expedientes con estos filtros.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100 text-left">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b bg-gray-50 text-xs text-gray-500">
                 <tr>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Solicitante</th>
-                  <th className="p-3">Dirección</th>
-                  <th className="p-3">Estado</th>
-                  <th className="p-3">Revisor asignado</th>
-                  <th className="p-3">Enviado</th>
-                  <th className="p-3" />
+                  <th className="px-4 py-3 font-medium">Expediente</th>
+                  <th className="px-4 py-3 font-medium">Solicitante</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 font-medium">Enviado</th>
+                  <th className="px-4 py-3 font-medium" />
                 </tr>
               </thead>
               <tbody>
-                {applications.map((a) => (
-                  <tr key={a.id} className="border-t hover:bg-gray-50">
-                    <td className="p-3 font-medium">{a.licenseType.code}</td>
-                    <td className="p-3">{a.applicant.fullName}</td>
-                    <td className="p-3">{a.formData?.direccionExacta ?? '—'}</td>
-                    <td className="p-3">
-                      <StatusBadge status={a.status} />
+                {applications.map((app) => (
+                  <tr key={app.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">
+                        {app.licenseType.code} · {app.formCode}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {app.formData?.direccionExacta ?? 'Sin dirección'}
+                      </p>
                     </td>
-                    <td className="p-3 text-gray-600">{a.reviewer?.fullName ?? 'Sin asignar'}</td>
-                    <td className="p-3 text-gray-600">
-                      {a.submittedAt ? new Date(a.submittedAt).toLocaleDateString('es-GT') : '—'}
+                    <td className="px-4 py-3">
+                      <p>{app.applicant.fullName}</p>
+                      <p className="text-xs text-gray-500">{app.applicant.email}</p>
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="px-4 py-3">
+                      <StatusBadge status={app.status} />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">
+                      {app.submittedAt
+                        ? new Date(app.submittedAt).toLocaleDateString('es-GT')
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       <Link
-                        href={`/revisor/expedientes/${a.id}`}
-                        className="text-primary-600 hover:underline"
+                        href={`/revisor/expedientes/${app.id}`}
+                        className="rounded border px-3 py-1.5 text-sm hover:bg-gray-100"
                       >
-                        Revisar
+                        Abrir
                       </Link>
                     </td>
                   </tr>
@@ -171,5 +191,20 @@ export default function RevisorPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function RevisorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen">
+          <Header />
+          <main className="mx-auto max-w-6xl p-6 text-sm text-gray-500">Cargando…</main>
+        </div>
+      }
+    >
+      <RevisorBandeja />
+    </Suspense>
   );
 }

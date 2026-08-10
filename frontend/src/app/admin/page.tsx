@@ -43,13 +43,22 @@ function Kpi({
   href?: string;
 }) {
   const inner = (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
+    <div
+      className={`rounded-lg border bg-white p-4 shadow-sm ${
+        href
+          ? 'cursor-pointer border-gray-200 transition hover:border-primary-400 hover:bg-primary-50/40 hover:shadow'
+          : ''
+      }`}
+    >
       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
       <p className="mt-1 text-3xl font-bold text-gray-900">{value}</p>
+      {href && (
+        <p className="mt-2 text-xs font-medium text-primary-700">Ver listado →</p>
+      )}
     </div>
   );
   return href ? (
-    <Link href={href} className="block transition hover:ring-2 hover:ring-primary-200">
+    <Link href={href} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400">
       {inner}
     </Link>
   ) : (
@@ -123,10 +132,26 @@ export default function AdminDashboardPage() {
           <>
             <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Kpi label="Expedientes" value={data.summary.totalApplications} href="/revisor" />
-              <Kpi label="Licencias" value={data.summary.licensesIssued} />
-              <Kpi label="En revisión" value={data.summary.inReview} href="/revisor" />
-              <Kpi label="En corrección" value={data.summary.inCorrection} href="/revisor" />
-              <Kpi label="Pend. pago" value={data.summary.pendingPayment} href="/revisor" />
+              <Kpi
+                label="Licencias"
+                value={data.summary.licensesIssued}
+                href="/revisor?status=LICENCIA_EMITIDA"
+              />
+              <Kpi
+                label="En revisión"
+                value={data.summary.inReview}
+                href="/revisor?status=EN_REVISION_TECNICA"
+              />
+              <Kpi
+                label="En corrección"
+                value={data.summary.inCorrection}
+                href="/revisor?status=EN_CORRECCION"
+              />
+              <Kpi
+                label="Pend. pago"
+                value={data.summary.pendingPayment}
+                href="/revisor?status=PENDIENTE_DE_PAGO"
+              />
               <Kpi
                 label="Usuarios pend."
                 value={data.summary.pendingUserApprovals}
