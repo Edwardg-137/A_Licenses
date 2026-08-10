@@ -22,7 +22,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 | Fase 3 — Revisión, observaciones y correcciones | ✅ Completada y verificada |
 | Fase 4 — Alineación, pago (simulado) e inspección final | ✅ Completada y verificada |
 | Fase 5 — Emisión de licencia (PDF + QR) | ✅ Completada y verificada |
-| Fase 6 — Dashboard y pulido | ⬜ No iniciada |
+| Fase 6 — Dashboard y pulido | ✅ Completada y verificada |
 
 ### Funcionalidades existentes (verificadas en ejecución)
 
@@ -37,6 +37,9 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Alineación territorial:** el revisor solicita la inspección; el inspector propone hasta 3 fechas desde su agenda; el solicitante confirma una; el inspector registra el resultado con nota y **foto obligatoria**. Conforme → `PENDIENTE_DE_PAGO`; no conforme → regresa a `EN_REVISION_TECNICA` con observación general (D-011).
 - **Pago de tasa municipal (F08):** cálculo automático configurable (`base + % sobre presupuesto estimado`, fórmula en `LicenseType.feeFormula`); vista con desglose; **pago en línea simulado** (banner de simulación) que genera comprobante PDF adjunto como D-15, o carga de comprobante externo; confirmación por revisor/Admin (D-012) → `LICENCIA_EMITIDA` (PDF de la licencia en Fase 5).
 - **Recepción de obra:** el solicitante la solicita tras la emisión; mismo ciclo de agenda; resultado conforme → expediente `CERRADO`; no conforme → permanece en recepción con nota.
+- **Dashboard Admin** (`/admin`): expedientes por estado, tiempos promedio por fase (auditoría), documentos más observados, KPIs y actividad reciente (`GET /reports/dashboard`).
+- **API docs:** Swagger UI en `/api/docs` (`@nestjs/swagger` v7).
+- **Seguridad:** checklist OWASP Top 10 en `Docs/security/owasp-checklist.md`.
 - **Emisión de licencia (opción 1):** al confirmar el pago se genera automáticamente el PDF oficial (`pdf-lib` + QR con `qrcode`), número correlativo `LC-GT-YYYY-NNNNNN`, registro `License` y notificación al solicitante/Admin. Descarga autenticada y verificación pública por token del QR (`/verificar/[token]`). Backfill `POST /applications/:id/issue-license` para expedientes pagados anteriores a la Fase 5.
 - **Agenda del inspector** (`/inspector`): solicitudes pendientes, propuesta de fechas, registro de resultado con evidencia fotográfica.
 - **Notificaciones in-app:** envío de expediente, observaciones, correcciones, aprobación, rechazo, inspección solicitada/fechas propuestas/visita confirmada, alineación conforme con monto, pago confirmado y resultado de recepción. Correo electrónico pendiente (decisión D-003).
@@ -96,7 +99,7 @@ cd c:\building_permits\frontend
 npm run dev
 ```
 
-Luego abrir **http://localhost:3000**.
+Luego abrir **http://localhost:3000**. Documentación de la API: **http://localhost:3001/api/docs**.
 
 ### En una máquina nueva (setup desde cero)
 
@@ -115,7 +118,7 @@ Creadas por el seed (`backend/prisma/seed.ts`) para testing manual de cada rol. 
 
 | Rol | Correo | Contraseña | Qué puede hacer hoy |
 | :--- | :--- | :--- | :--- |
-| Administrador | `admin@permisogt.local` | `Admin123!` | Panel de usuarios: aprobar solicitantes, crear Revisores/Inspectores, activar/desactivar |
+| Administrador | `admin@permisogt.local` | `Admin123!` | Dashboard de métricas; panel de usuarios; bandeja de expedientes |
 | Revisor Municipal | `revisor@permisogt.local` | `Revisor123` | Bandeja con filtros; revisión documental (✅/⚠️/❌ con texto y prioridad), enviar a corrección, aprobar técnicamente o rechazar con dictamen |
 | Inspector | `inspector@permisogt.local` | `Inspector123` | Agenda de inspecciones: proponer fechas, registrar resultado con foto (alineación y recepción de obra) |
 | Solicitante | `solicitante@permisogt.local` | `Solicita123` | Crear expedientes F08, cargar/verificar documentos, enviar a revisión; atender observaciones; confirmar fecha de visita; pagar (simulado o comprobante externo); solicitar recepción de obra |

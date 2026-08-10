@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-10 — Fase 6: Dashboard Admin, Swagger y checklist OWASP
+
+- **Descripción:** Módulo `reports` con `GET /reports/dashboard` (solo ADMIN): KPIs, expedientes por estado, tiempo promedio por fase (auditoría), documentos más observados y actividad reciente. Frontend `/admin` con visualización de métricas. Swagger UI en `/api/docs` (`@nestjs/swagger@7`, D-015). Checklist OWASP Top 10 en `Docs/security/owasp-checklist.md`. UX: Header unificado en Admin, redirección post-login al dashboard.
+- **Documentos:** `implementations/2026-08-fase6-dashboard-y-pulido.md`; `security/owasp-checklist.md`; `status/general.md`, `status/structure.md`, `status/architecture.md`, `status/decisions.md` (D-015).
+- **Verificación:** ✅ Dashboard con datos reales; 403 para no-Admin; Swagger HTTP 200; frontend y backend compilan.
+- **Impacto:** Cierra el plan MVP (fases 0–6). Residual: rate limiting, MFA, correo real y protección de Swagger en producción.
+
 ## 2026-08-10 — Fase 5: Emisión de licencia (PDF + QR) y verificación pública
 
 - **Descripción:** Nuevo módulo `licenses`: al confirmar el pago se emite automáticamente la licencia oficial (opción 1 / D-014) con PDF generado por `pdf-lib`, QR embebido (`qrcode`), correlativo `LC-GT-YYYY-NNNNNN` y registro `License`. Endpoints de metadatos/descarga autenticados, verificación pública `@Public()` por token, y backfill `issue-license` para expedientes pagados previos. Frontend: descarga en vista de solicitante/revisor y página pública `/verificar/[token]`. Variable `PUBLIC_APP_URL`.

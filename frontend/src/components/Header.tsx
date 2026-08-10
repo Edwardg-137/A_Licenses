@@ -15,6 +15,7 @@ const NAV_BY_ROLE: Record<string, NavLink[]> = {
   REVISOR: [{ href: '/revisor', label: 'Bandeja de expedientes' }],
   INSPECTOR: [{ href: '/inspector', label: 'Agenda de inspecciones' }],
   ADMIN: [
+    { href: '/admin', label: 'Dashboard' },
     { href: '/admin/usuarios', label: 'Usuarios' },
     { href: '/revisor', label: 'Expedientes' },
   ],

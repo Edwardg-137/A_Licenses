@@ -2,8 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Header from '@/components/Header';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { ROLE_LABEL } from '@/lib/constants';
 
 interface UserRow {
   id: string;
@@ -22,16 +24,9 @@ const STATUS_LABEL: Record<UserRow['status'], string> = {
   DISABLED: 'Desactivado',
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  SOLICITANTE: 'Solicitante',
-  REVISOR: 'Revisor',
-  INSPECTOR: 'Inspector',
-  ADMIN: 'Admin',
-};
-
 export default function AdminUsuariosPage() {
   const router = useRouter();
-  const { user, clearSession } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -72,22 +67,13 @@ export default function AdminUsuariosPage() {
   const others = users.filter((u) => u.status !== 'PENDING_APPROVAL');
 
   return (
-    <main className="mx-auto max-w-5xl p-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary-700">PermisoGT — Administración</h1>
-          <p className="text-sm text-gray-600">Gestión de usuarios · {user.fullName}</p>
-        </div>
-        <button
-          onClick={() => {
-            clearSession();
-            router.replace('/login');
-          }}
-          className="rounded border px-4 py-2 text-sm hover:bg-gray-100"
-        >
-          Cerrar sesión
-        </button>
-      </header>
+    <div className="min-h-screen bg-slate-50">
+      <Header />
+      <main className="mx-auto max-w-5xl p-6">
+        <h1 className="text-2xl font-bold text-gray-900">Gestión de usuarios</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Aprobar solicitantes y administrar cuentas internas
+        </p>
 
       {error && (
         <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -207,7 +193,8 @@ export default function AdminUsuariosPage() {
           </table>
         </div>
       </section>
-    </main>
+      </main>
+    </div>
   );
 }
 

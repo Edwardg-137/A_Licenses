@@ -20,8 +20,9 @@ Monorepo con dos aplicaciones que se comunican por HTTP. En desarrollo se pueden
 ```
 
 - **Frontend (Next.js, App Router):** páginas cliente (`'use client'`); el estado de sesión vive en Zustand persistido en localStorage. Build Docker usa `output: 'standalone'`.
-- **Backend (NestJS):** API REST con prefijo `/api`, validación global con `class-validator` (`whitelist` + `forbidNonWhitelisted`), CORS restringido al origen del frontend. En contenedor, el entrypoint aplica `prisma migrate deploy` y el seed si `RUN_SEED=true`.
+- **Backend (NestJS):** API REST con prefijo `/api`, validación global con `class-validator` (`whitelist` + `forbidNonWhitelisted`), CORS restringido al origen del frontend. Documentación OpenAPI en `/api/docs` (Swagger UI — D-015; desactivar o proteger en producción). En contenedor, el entrypoint aplica `prisma migrate deploy` y el seed si `RUN_SEED=true`.
 - **Base de datos (PostgreSQL):** acceso exclusivo vía Prisma (`PrismaService` global).
+
 ## Multi-tenancy
 
 Aislamiento por **columna `tenantId`** en todas las tablas de negocio (decisión D-002). En el MVP existe un único tenant (slug `guatemala`, configurado en `DEFAULT_TENANT_SLUG`); todos los servicios filtran por el `tenantId` del usuario autenticado, nunca por parámetros del cliente.

@@ -129,3 +129,12 @@
 - **Decisión:** Añadir `docker-compose.yml` con servicios `db` (Postgres 16), `backend` (NestJS) y `frontend` (Next.js standalone). El puerto host de Postgres es **5433** para no chocar con una instalación local en 5432. Sigue siendo válido el modo híbrido (`docker compose up db -d` + Nest/Next en el host).
 - **Justificación:** Un solo comando reproduce migraciones, seed y arranque; alinea el repo con el despliegue containerizado futuro.
 - **Consecuencias:** Hay que liberar los puertos 3000/3001/5433 (o cambiarlos en `.env`). Redis/BullMQ siguen fuera del MVP (D-003), aunque Docker ya no es el bloqueador. `NEXT_PUBLIC_API_URL` se fija en el **build** de la imagen frontend.
+
+## D-015 — Swagger UI en desarrollo; proteger o desactivar en producción
+
+- **Fecha:** 2026-08-10
+- **Contexto:** Fase 6 exige documentación técnica de la API (OpenAPI).
+- **Problema:** Cómo exponer la documentación sin filtrar el superficie de ataque en producción.
+- **Decisión:** Integrar `@nestjs/swagger@7` + `swagger-ui-express` en `/api/docs` para desarrollo y staging. En producción se debe desactivar el setup o protegerlo (red privada / auth básica).
+- **Justificación:** Cumple el entregable del plan sin acoplar generadores externos; v7 es compatible con NestJS 10.
+- **Consecuencias:** Queda registrado en el checklist OWASP (A05). No se anotan todos los DTOs en esta fase; los tags del DocumentBuilder organizan los módulos.

@@ -16,7 +16,7 @@ export default function HomePage() {
     }
     switch (user.role) {
       case 'ADMIN':
-        router.replace('/admin/usuarios');
+        router.replace('/admin');
         break;
       case 'SOLICITANTE':
         router.replace('/solicitante');

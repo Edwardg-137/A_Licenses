@@ -43,11 +43,12 @@ c:\building_permits\
 | `src/inspections/` | Inspecciones (alineación territorial y recepción de obra): solicitud, propuesta de hasta 3 fechas, confirmación por el solicitante, resultado con foto obligatoria; agenda del inspector |
 | `src/payments/` | Cálculo de tasa F08 (`LicenseType.feeFormula`), pago simulado con comprobante PDF generado en código (`receipt-pdf.ts`), confirmación municipal (D-012); al confirmar dispara la emisión de licencia |
 | `src/licenses/` | Emisión de licencia (PDF con `pdf-lib` + QR), correlativo `LC-GT-YYYY-NNNNNN`, descarga autenticada, verificación pública por token, backfill `issue-license` |
+| `src/reports/` | Métricas del dashboard Admin: conteos por estado, tiempos promedio, documentos más observados, actividad reciente |
 | `src/notifications/` | Notificaciones in-app (listar, contador de no leídas, marcar leída) |
 | `uploads/` | Archivos subidos en desarrollo (no versionado) |
 | `.env.example` | Variables de entorno documentadas |
 
-Módulos futuros previstos (fase 6): `reports` (dashboard, ver `Docs/mvp_docs/05-arquitectura-y-stack.md` §4).
+Módulos previstos del plan MVP: todos implementados (auth, users, applications, documents, review, inspections, payments, licenses, reports, notifications).
 
 ## frontend/
 
@@ -59,6 +60,7 @@ Módulos futuros previstos (fase 6): `reports` (dashboard, ver `Docs/mvp_docs/05
 | `src/app/page.tsx` | Redirección según sesión y rol |
 | `src/app/login/` | Inicio de sesión |
 | `src/app/registro/` | Registro de solicitante (profesional colegiado) |
+| `src/app/admin/` | Dashboard de métricas del Admin (KPIs, estados, tiempos, documentos observados, actividad) |
 | `src/app/admin/usuarios/` | Panel del Admin: aprobar solicitantes, crear/activar/desactivar usuarios |
 | `src/app/solicitante/` | Dashboard del solicitante (sus expedientes) |
 | `src/app/solicitante/nueva/` | Asistente: onboarding pre-trámite → clasificación F08 → datos del proyecto |
