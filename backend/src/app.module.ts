@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { DocumentsModule } from './documents/documents.module';
 import { InspectionsModule } from './inspections/inspections.module';
+import { LicensesModule } from './licenses/licenses.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReviewModule } from './review/review.module';
@@ -25,6 +26,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     ReviewModule,
     InspectionsModule,
     PaymentsModule,
+    LicensesModule,
   ],
   providers: [
     // Autenticación global: todo endpoint requiere JWT salvo que se marque @Public()

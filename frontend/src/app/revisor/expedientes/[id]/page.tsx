@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import RoundsHistory, { ObservationItem } from '@/components/RoundsHistory';
 import StatusBadge from '@/components/StatusBadge';
-import { api, ApiError, openDocumentPreview } from '@/lib/api';
+import { api, ApiError, downloadLicensePdf, openDocumentPreview } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 interface CurrentDocument {
@@ -47,6 +47,15 @@ interface PaymentInfo {
   confirmedAt: string | null;
 }
 
+interface LicenseInfo {
+  id: string;
+  number: string;
+  qrToken: string;
+  issuedAt: string;
+  validUntil: string | null;
+  verifyUrl: string;
+}
+
 interface ApplicationDetail {
   id: string;
   status: string;
@@ -77,6 +86,7 @@ interface ApplicationDetail {
   observations: ObservationItem[];
   inspections: InspectionItem[];
   payment: PaymentInfo | null;
+  license: LicenseInfo | null;
 }
 
 const INSPECTION_TYPE_LABEL: Record<string, string> = {
@@ -259,9 +269,34 @@ export default function RevisorExpedientePage() {
     setError(null);
     setNotice(null);
     try {
-      await api(`/applications/${params.id}/confirm-payment`, { method: 'POST' });
+      const result = await api<{
+        status: string;
+        license?: { number: string };
+      }>(`/applications/${params.id}/confirm-payment`, { method: 'POST' });
       await load();
-      setNotice('Pago confirmado. El expediente avanza a emisión de licencia.');
+      setNotice(
+        result.license
+          ? `Pago confirmado. Licencia ${result.license.number} emitida.`
+          : 'Pago confirmado. El expediente avanza a emisión de licencia.',
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Error de conexión');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onIssueLicense() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const license = await api<{ number: string }>(
+        `/applications/${params.id}/issue-license`,
+        { method: 'POST' },
+      );
+      await load();
+      setNotice(`Licencia ${license.number} emitida.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error de conexión');
     } finally {
@@ -633,6 +668,66 @@ export default function RevisorExpedientePage() {
                 )}
               </section>
             )}
+
+            {/* Licencia emitida */}
+            {detail.license && (
+              <section className="mt-6 rounded-lg border border-green-300 bg-green-50 p-6">
+                <h2 className="text-lg font-semibold text-green-900">Licencia emitida</h2>
+                <p className="mt-1 text-sm text-green-800">
+                  Número: <strong className="font-mono">{detail.license.number}</strong>
+                  {detail.license.validUntil && (
+                    <>
+                      {' '}
+                      · Vigente hasta{' '}
+                      {new Date(detail.license.validUntil).toLocaleDateString('es-GT')}
+                    </>
+                  )}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await downloadLicensePdf(
+                          detail.id,
+                          `licencia-${detail.license!.number}.pdf`,
+                        );
+                      } catch (err) {
+                        setError(err instanceof ApiError ? err.message : 'Error al descargar');
+                      }
+                    }}
+                    className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+                  >
+                    📄 Descargar PDF
+                  </button>
+                  <a
+                    href={detail.license.verifyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded border border-green-600 px-4 py-2 text-sm text-green-800 hover:bg-green-100"
+                  >
+                    🔗 Verificación pública
+                  </a>
+                </div>
+              </section>
+            )}
+
+            {!detail.license &&
+              ['LICENCIA_EMITIDA', 'RECEPCION_DE_OBRA', 'CERRADO'].includes(detail.status) &&
+              canReview && (
+                <section className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
+                  <p className="text-sm text-orange-900">
+                    El expediente está pagado pero aún no tiene el PDF de licencia (p. ej.
+                    expedientes anteriores a la Fase 5).
+                  </p>
+                  <button
+                    onClick={onIssueLicense}
+                    disabled={busy}
+                    className="mt-2 rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    Emitir licencia ahora
+                  </button>
+                </section>
+              )}
 
             {/* Historial de inspecciones */}
             {detail.inspections.length > 0 && (

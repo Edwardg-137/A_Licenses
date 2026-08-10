@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-10 — Fase 5: Emisión de licencia (PDF + QR) y verificación pública
+
+- **Descripción:** Nuevo módulo `licenses`: al confirmar el pago se emite automáticamente la licencia oficial (opción 1 / D-014) con PDF generado por `pdf-lib`, QR embebido (`qrcode`), correlativo `LC-GT-YYYY-NNNNNN` y registro `License`. Endpoints de metadatos/descarga autenticados, verificación pública `@Public()` por token, y backfill `issue-license` para expedientes pagados previos. Frontend: descarga en vista de solicitante/revisor y página pública `/verificar/[token]`. Variable `PUBLIC_APP_URL`.
+- **Documentos:** `implementations/2026-08-fase5-emision-de-licencia.md`; `status/general.md`, `status/structure.md`, `status/architecture.md`, `status/decisions.md` (D-014).
+- **Verificación:** ✅ Emisión al confirmar pago, PDF válido, verificación pública, 404 de token inválido, idempotencia y backfill sobre expediente cerrado de Fase 4.
+- **Impacto:** El MVP cubre el documento oficial de licencia verificable; queda la Fase 6 (dashboard y pulido).
+
 ## 2026-08-09 — Docker Compose (db + backend + frontend)
 
 - **Descripción:** Se añadió el stack containerizado oficial: `docker-compose.yml` con PostgreSQL 16 (puerto host 5433), API NestJS y portal Next.js (`output: 'standalone'`). El backend aplica migraciones y seed al arrancar. Documentado como vía recomendada de instalación; el modo nativo Windows sigue disponible.

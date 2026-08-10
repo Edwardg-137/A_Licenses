@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { StorageService } from '../documents/storage.service';
+import { LicensesService } from '../licenses/licenses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildSimplePdf } from './receipt-pdf';
@@ -22,6 +23,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly storage: StorageService,
+    private readonly licenses: LicensesService,
   ) {}
 
   /** Tasa F08: base + % sobre presupuesto estimado de obra (fórmula configurable por licencia). */
@@ -240,14 +242,19 @@ export class PaymentsService {
       }),
     ]);
 
-    await this.notifications.notifyUser(
-      application.applicantId,
-      user.tenantId,
-      'Pago confirmado',
-      `La municipalidad confirmó su pago de Q ${Number(payment.amount).toFixed(2)}. Su licencia está en proceso de emisión.`,
-      applicationId,
-    );
+    // Opción 1 (Fase 5): emitir la licencia oficial en el mismo acto de confirmación
+    // (LicensesService notifica al solicitante y al Admin)
+    const license = await this.licenses.issueForApplication(user, applicationId);
 
-    return { status: 'LICENCIA_EMITIDA' as const };
+    return {
+      status: 'LICENCIA_EMITIDA' as const,
+      license: {
+        id: license.id,
+        number: license.number,
+        issuedAt: license.issuedAt,
+        validUntil: license.validUntil,
+        verifyUrl: `${(process.env.PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/verificar/${license.qrToken}`,
+      },
+    };
   }
 }

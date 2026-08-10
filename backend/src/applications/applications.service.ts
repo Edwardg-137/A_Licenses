@@ -196,6 +196,15 @@ export class ApplicationsService {
           include: { inspector: { select: { fullName: true } } },
         },
         payment: true,
+        license: {
+          select: {
+            id: true,
+            number: true,
+            qrToken: true,
+            issuedAt: true,
+            validUntil: true,
+          },
+        },
       },
     });
     if (!application) throw new NotFoundException('Expediente no encontrado');
@@ -220,7 +229,17 @@ export class ApplicationsService {
       };
     });
 
-    return { ...application, documents, validationReport };
+    return {
+      ...application,
+      documents,
+      validationReport,
+      license: application.license
+        ? {
+            ...application.license,
+            verifyUrl: `${(process.env.PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/verificar/${application.license.qrToken}`,
+          }
+        : null,
+    };
   }
 
   /** Tipos de licencia activos del tenant con sus requisitos (para el asistente de creación). */

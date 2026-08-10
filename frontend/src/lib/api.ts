@@ -104,4 +104,20 @@ export async function openDocumentPreview(documentId: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/** Descarga el PDF oficial de la licencia de un expediente. */
+export async function downloadLicensePdf(applicationId: string, fileName?: string): Promise<void> {
+  const { accessToken } = useAuthStore.getState();
+  const response = await fetch(`${API_URL}/applications/${applicationId}/license/download`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  if (!response.ok) throw new ApiError(response.status, 'No se pudo descargar la licencia');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName ?? 'licencia.pdf';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export { API_URL };

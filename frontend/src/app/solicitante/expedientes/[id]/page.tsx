@@ -5,7 +5,7 @@ import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import RoundsHistory, { ObservationItem } from '@/components/RoundsHistory';
 import StatusBadge from '@/components/StatusBadge';
-import { api, apiUpload, ApiError, openDocumentPreview } from '@/lib/api';
+import { api, apiUpload, ApiError, downloadLicensePdf, openDocumentPreview } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 interface Requirement {
@@ -65,6 +65,15 @@ interface PaymentInfo {
   confirmedAt: string | null;
 }
 
+interface LicenseInfo {
+  id: string;
+  number: string;
+  qrToken: string;
+  issuedAt: string;
+  validUntil: string | null;
+  verifyUrl: string;
+}
+
 interface ApplicationDetail {
   id: string;
   status: string;
@@ -83,6 +92,7 @@ interface ApplicationDetail {
   validationReport: ValidationItem[];
   inspections: InspectionItem[];
   payment: PaymentInfo | null;
+  license: LicenseInfo | null;
 }
 
 const EDITABLE_STATES = ['BORRADOR', 'OBSERVADO_FORMATO'];
@@ -477,21 +487,57 @@ export default function ExpedienteDetailPage() {
               </section>
             )}
 
-            {/* Licencia emitida → recepción de obra */}
-            {detail.status === 'LICENCIA_EMITIDA' && (
+            {/* Licencia emitida → descarga + recepción de obra */}
+            {(detail.status === 'LICENCIA_EMITIDA' ||
+              detail.status === 'RECEPCION_DE_OBRA' ||
+              detail.status === 'CERRADO') &&
+              detail.license && (
               <section className="mt-4 rounded-lg border border-green-300 bg-green-50 p-6">
                 <h2 className="text-lg font-semibold text-green-900">🎉 Licencia emitida</h2>
                 <p className="mt-1 text-sm text-green-800">
-                  Su pago fue confirmado y la licencia está emitida. El documento oficial (PDF con
-                  QR de verificación) estará disponible en la siguiente fase de la plataforma.
+                  Número: <strong className="font-mono">{detail.license.number}</strong>
+                  {detail.license.validUntil && (
+                    <>
+                      {' '}
+                      · Vigente hasta{' '}
+                      {new Date(detail.license.validUntil).toLocaleDateString('es-GT')}
+                    </>
+                  )}
                 </p>
-                <button
-                  onClick={onRequestRecepcion}
-                  disabled={busy}
-                  className="mt-3 rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                >
-                  🏗️ Solicitar recepción de obra (al finalizar la construcción)
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await downloadLicensePdf(
+                          detail.id,
+                          `licencia-${detail.license!.number}.pdf`,
+                        );
+                      } catch (err) {
+                        setError(err instanceof ApiError ? err.message : 'Error al descargar');
+                      }
+                    }}
+                    className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+                  >
+                    📄 Descargar licencia (PDF)
+                  </button>
+                  <a
+                    href={detail.license.verifyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded border border-green-600 px-4 py-2 text-sm text-green-800 hover:bg-green-100"
+                  >
+                    🔗 Abrir verificación pública
+                  </a>
+                </div>
+                {detail.status === 'LICENCIA_EMITIDA' && (
+                  <button
+                    onClick={onRequestRecepcion}
+                    disabled={busy}
+                    className="mt-3 rounded bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    🏗️ Solicitar recepción de obra (al finalizar la construcción)
+                  </button>
+                )}
               </section>
             )}
 

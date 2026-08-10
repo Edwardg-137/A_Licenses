@@ -21,7 +21,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 | Fase 2 — Expediente, clasificación y documentos | ✅ Completada y verificada |
 | Fase 3 — Revisión, observaciones y correcciones | ✅ Completada y verificada |
 | Fase 4 — Alineación, pago (simulado) e inspección final | ✅ Completada y verificada |
-| Fase 5 — Emisión de licencia (PDF + QR) | ⬜ No iniciada |
+| Fase 5 — Emisión de licencia (PDF + QR) | ✅ Completada y verificada |
 | Fase 6 — Dashboard y pulido | ⬜ No iniciada |
 
 ### Funcionalidades existentes (verificadas en ejecución)
@@ -37,6 +37,7 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - **Alineación territorial:** el revisor solicita la inspección; el inspector propone hasta 3 fechas desde su agenda; el solicitante confirma una; el inspector registra el resultado con nota y **foto obligatoria**. Conforme → `PENDIENTE_DE_PAGO`; no conforme → regresa a `EN_REVISION_TECNICA` con observación general (D-011).
 - **Pago de tasa municipal (F08):** cálculo automático configurable (`base + % sobre presupuesto estimado`, fórmula en `LicenseType.feeFormula`); vista con desglose; **pago en línea simulado** (banner de simulación) que genera comprobante PDF adjunto como D-15, o carga de comprobante externo; confirmación por revisor/Admin (D-012) → `LICENCIA_EMITIDA` (PDF de la licencia en Fase 5).
 - **Recepción de obra:** el solicitante la solicita tras la emisión; mismo ciclo de agenda; resultado conforme → expediente `CERRADO`; no conforme → permanece en recepción con nota.
+- **Emisión de licencia (opción 1):** al confirmar el pago se genera automáticamente el PDF oficial (`pdf-lib` + QR con `qrcode`), número correlativo `LC-GT-YYYY-NNNNNN`, registro `License` y notificación al solicitante/Admin. Descarga autenticada y verificación pública por token del QR (`/verificar/[token]`). Backfill `POST /applications/:id/issue-license` para expedientes pagados anteriores a la Fase 5.
 - **Agenda del inspector** (`/inspector`): solicitudes pendientes, propuesta de fechas, registro de resultado con evidencia fotográfica.
 - **Notificaciones in-app:** envío de expediente, observaciones, correcciones, aprobación, rechazo, inspección solicitada/fechas propuestas/visita confirmada, alineación conforme con monto, pago confirmado y resultado de recepción. Correo electrónico pendiente (decisión D-003).
 - **Auditoría:** cada creación, carga/reemplazo de documento, envío y asignación queda en `AuditLog` inmutable.
@@ -47,9 +48,10 @@ Un solo tipo de licencia: **L-01 Obra Mayor — Vivienda Unifamiliar** (formular
 - No hay envío real de correos (pendiente; en desarrollo se registrarán en consola).
 - No hay Redis/BullMQ (pospuesto — ver decisión D-003; Docker ya está disponible — D-013 — pero la cola de correos aún no se implementó).
 - La fórmula de la tasa F08 usa valores provisionales en el seed; el arancel real está pendiente de conseguirse.
-- El comprobante de pago simulado es un PDF mínimo generado en código (sin librería); la licencia formal con QR llega en Fase 5.
+- El comprobante de pago simulado es un PDF mínimo generado en código (sin librería); la licencia oficial usa `pdf-lib` + QR.
 - El certificado de recepción de obra como documento descargable queda fuera del MVP (el resultado conforme cierra el expediente).
 - Las fotos de evidencia de inspección no pasan por validación de MIME por contenido (a diferencia de los documentos del expediente, D-009).
+- El correo con la licencia adjunta está aplazado (D-003); la notificación es in-app y la descarga desde el portal.
 - El tenant es único (slug `guatemala` desde `.env`); el multi-municipio activo es de fase posterior.
 
 ## Tecnologías

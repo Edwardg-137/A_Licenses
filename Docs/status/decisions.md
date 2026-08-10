@@ -112,6 +112,15 @@
 - **Justificación:** Una sola regla para ambas vías; el expediente documental sigue siendo la referencia completa.
 - **Consecuencias:** `Payment.receiptPath` queda como copia de conveniencia. El revisor puede ver el D-15 desde el expediente antes de confirmar.
 
+## D-014 — Emisión automática de la licencia al confirmar el pago
+
+- **Fecha:** 2026-08-10
+- **Contexto:** Fase 5. El flujo del MVP llega a `LICENCIA_EMITIDA` al confirmar el pago; el documento de propuesta describe también que “el revisor emite la resolución final”.
+- **Problema:** ¿La generación del PDF + QR es un paso manual del revisor o ocurre al confirmar el pago?
+- **Decisión (opción 1, confirmada por el usuario):** al confirmar el pago, `PaymentsService` llama a `LicensesService.issueForApplication`, que genera el PDF (`pdf-lib` + QR con `qrcode`), asigna correlativo `LC-GT-YYYY-NNNNNN`, guarda el archivo y crea el registro `License`. Existe `POST /applications/:id/issue-license` solo como **backfill** idempotente para expedientes ya pagados sin documento (p. ej. pruebas de Fase 4).
+- **Justificación:** Evita un paso manual adicional; alinea el estado `LICENCIA_EMITIDA` con la existencia real del PDF; el revisor ya autorizó al confirmar el cobro.
+- **Consecuencias:** `PUBLIC_APP_URL` define la base del enlace embebido en el QR. La verificación pública (`GET /licenses/verify/:token`) es `@Public()`. El correo con adjunto sigue aplazado (D-003).
+
 ## D-013 — Docker Compose como forma oficial de levantar el stack
 
 - **Fecha:** 2026-08-09
