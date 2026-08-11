@@ -29,7 +29,7 @@ c:\building_permits\
 | Ruta | Propósito |
 | :--- | :--- |
 | `prisma/schema.prisma` | Modelo de datos completo del MVP (tenants, usuarios, tipos de licencia, expedientes, documentos, observaciones, inspecciones, pagos, licencias, notificaciones, auditoría) |
-| `prisma/seed.ts` | Seed: tenant Guatemala, 2 usuarios de prueba por cada rol (Admin, Revisor, Inspector, Solicitante), L-01 con requisitos D-01…D-15 |
+| `prisma/seed.ts` | Seed: tenant Guatemala, 2 usuarios por rol, L-01 (F08, D-01…D-15) y L-02 (F02, D-01…D-21 opcionales D-16…) |
 | `prisma/tsconfig.json` | tsconfig del seed (CommonJS) para `ts-node` en Docker/local |
 | `Dockerfile` / `docker-entrypoint.sh` | Imagen API: migrate deploy + seed opcional + `node dist/main.js` |
 | `src/main.ts` | Bootstrap: prefijo `/api`, CORS, ValidationPipe global |
@@ -37,7 +37,7 @@ c:\building_permits\
 | `src/prisma/` | `PrismaService` global (conexión a BD) |
 | `src/auth/` | Registro, login, refresh (rotatorio), logout; estrategia JWT; guards `JwtAuthGuard`/`RolesGuard`; decoradores `@Public()`, `@Roles()`, `@CurrentUser()` |
 | `src/users/` | Gestión de usuarios por el Admin: listar, crear internos, aprobar solicitantes, activar/desactivar |
-| `src/applications/` | Expedientes: creación con clasificación F08, listados con filtros, detalle con informe de validación, validar/enviar, asignación de revisor |
+| `src/applications/` | Expedientes: clasificación F08/F02 (`classification.ts`), creación, listados, validar/enviar, asignación de revisor |
 | `src/documents/` | Carga de documentos con detección de MIME por contenido, versionado, descarga autenticada; `StorageService` (disco local, único punto de contacto con el FS); en `EN_CORRECCION` solo acepta reemplazos de documentos observados |
 | `src/review/` | Revisión técnica: marcar documentos (✅/⚠️/❌ con texto y prioridad), enviar a corrección, aprobar, rechazar con dictamen y reenvío del solicitante; reglas de rondas (D-010, D-011) |
 | `src/inspections/` | Inspecciones (alineación territorial y recepción de obra): solicitud, propuesta de hasta 3 fechas, confirmación por el solicitante, resultado con foto obligatoria; agenda del inspector |
@@ -63,7 +63,8 @@ Módulos previstos del plan MVP: todos implementados (auth, users, applications,
 | `src/app/admin/` | Dashboard de métricas del Admin (KPIs, estados, tiempos, documentos observados, actividad) |
 | `src/app/admin/usuarios/` | Panel del Admin: aprobar solicitantes, crear/activar/desactivar usuarios |
 | `src/app/solicitante/` | Dashboard del solicitante (sus expedientes) |
-| `src/app/solicitante/nueva/` | Asistente: onboarding pre-trámite → clasificación F08 → datos del proyecto |
+| `src/app/solicitante/nueva/` | Asistente: onboarding → clasificación F08/F02 → datos del proyecto (campos extra F02) |
+| `src/lib/classification.ts` | Espejo de la regla de clasificación del backend |
 | `src/app/solicitante/expedientes/[id]/` | Expediente: datos, carga/verificación/envío; corrección; visitas; pago; descarga de licencia PDF + enlace de verificación; solicitud de recepción de obra; historial de rondas |
 | `src/app/revisor/` | Bandeja de expedientes con filtros por estado y fecha (revisor y admin) |
 | `src/app/revisor/expedientes/[id]/` | Revisión documental, alineación, confirmación de pago (emite licencia), descarga/backfill de licencia, historial de rondas e inspecciones |

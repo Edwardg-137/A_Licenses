@@ -13,6 +13,7 @@ import {
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { classifyProject, ClassifyInput, ClassifyResult } from './classification';
 import {
   CreateApplicationDto,
   ProjectFormDataDto,
@@ -41,26 +42,14 @@ export class ApplicationsService {
 
   // ────────────────────────── Clasificación ──────────────────────────
 
-  /**
-   * Regla del MVP (mvp_docs/03-flujo §3 y 04 §2.1): F08 aplica solo a vivienda
-   * unifamiliar residencial de ≤ 700 m² fuera del Centro Histórico.
-   */
-  classify(form: Pick<ProjectFormDataDto, 'uso' | 'areaConstruccionM2' | 'centroHistorico'>) {
-    const reasons: string[] = [];
-    if (form.uso !== 'RESIDENCIAL') {
-      reasons.push('El uso del inmueble no es residencial unifamiliar (requiere formulario F02 u otro trámite)');
-    }
-    if (form.areaConstruccionM2 > 700) {
-      reasons.push('El área de construcción supera los 700 m² permitidos para el formulario F08');
-    }
-    if (form.centroHistorico) {
-      reasons.push('Los inmuebles en Centro Histórico requieren dictamen del IDAEH y trámite presencial');
-    }
-    return {
-      formCode: reasons.length === 0 ? 'F08' : null,
-      available: reasons.length === 0,
-      reasons,
-    };
+  /** Clasificación F08 (L-01) vs F02 (L-02). Ver `classification.ts`. */
+  classify(
+    form: Pick<
+      ProjectFormDataDto,
+      'uso' | 'areaConstruccionM2' | 'centroHistorico' | 'cambioUsoSuelo'
+    >,
+  ): ClassifyResult {
+    return classifyProject(form as ClassifyInput);
   }
 
   // ────────────────────────── CRUD del expediente ──────────────────────────
@@ -78,12 +67,22 @@ export class ApplicationsService {
     }
 
     const classification = this.classify(dto.formData);
-    if (!classification.available) {
+    if (!classification.available || !classification.formCode) {
       throw new BadRequestException({
-        message: 'El proyecto no califica para el trámite en línea (F08). Debe proceder presencialmente.',
+        message:
+          'El proyecto no califica para el trámite en línea. Debe proceder presencialmente en Ventanilla Única.',
         reasons: classification.reasons,
       });
     }
+
+    if (licenseType.formCode !== classification.formCode) {
+      throw new BadRequestException({
+        message: `El tipo de licencia no corresponde a la clasificación (${classification.formCode} / ${classification.licenseTypeCode}).`,
+        reasons: classification.reasons,
+      });
+    }
+
+    this.assertFormDataForFormCode(classification.formCode, dto.formData);
 
     // El colegiado responsable se toma del perfil verificado del solicitante
     const applicant = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
@@ -93,7 +92,7 @@ export class ApplicationsService {
         tenantId: user.tenantId,
         licenseTypeId: licenseType.id,
         applicantId: user.id,
-        formCode: 'F08',
+        formCode: classification.formCode,
         formData: {
           ...dto.formData,
           colegiadoTipo: applicant.collegeType,
@@ -102,9 +101,34 @@ export class ApplicationsService {
       },
     });
 
-    await this.audit(user.tenantId, user.id, application.id, 'Expediente creado en estado Borrador');
+    await this.audit(
+      user.tenantId,
+      user.id,
+      application.id,
+      `Expediente creado en estado Borrador (${classification.formCode} / ${licenseType.code})`,
+    );
 
     return application;
+  }
+
+  /** Campos mínimos adicionales exigidos según formulario municipal. */
+  private assertFormDataForFormCode(formCode: 'F08' | 'F02', form: ProjectFormDataDto) {
+    if (formCode !== 'F02') return;
+    const missing: string[] = [];
+    if (form.areaTerrenoM2 == null || form.areaTerrenoM2 < 0) {
+      missing.push('área del terreno (RGP)');
+    }
+    if (!form.descripcionTrabajos?.trim()) {
+      missing.push('descripción de los trabajos');
+    }
+    if (form.tiempoEjecucionAnios == null || form.tiempoEjecucionAnios < 1) {
+      missing.push('tiempo estimado de ejecución (años)');
+    }
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Para el formulario F02 faltan campos obligatorios: ${missing.join(', ')}`,
+      );
+    }
   }
 
   async update(user: AuthenticatedUser, id: string, dto: CreateApplicationDto['formData']) {

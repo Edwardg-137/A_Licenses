@@ -1,42 +1,50 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import {
+  classifyProject,
+  ClassifyResult,
+  UsoInmueble,
+} from '@/lib/classification';
 import { PRE_TRAMITE_LINKS, ZONAS_GUATEMALA } from '@/lib/constants';
 
 interface LicenseType {
   id: string;
   code: string;
   name: string;
-}
-
-interface ClassificationResult {
-  formCode: string | null;
-  available: boolean;
-  reasons: string[];
+  formCode: string;
 }
 
 type Step = 'onboarding' | 'clasificacion' | 'formulario';
+
+const OBRA_TIPOS_F02 = [
+  { id: 'CONSTRUCCION_NUEVA', label: 'Construcción nueva' },
+  { id: 'AMPLIACION', label: 'Ampliación' },
+  { id: 'REMODELACION', label: 'Remodelación' },
+  { id: 'DEMOLICION', label: 'Demolición' },
+  { id: 'MOVIMIENTO_TIERRAS', label: 'Movimiento de tierras / excavación' },
+  { id: 'CAMBIO_USO_SUELO', label: 'Cambio de uso de suelo' },
+] as const;
 
 export default function NuevaSolicitudPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<Step>('onboarding');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [licenseType, setLicenseType] = useState<LicenseType | null>(null);
+  const [licenseTypes, setLicenseTypes] = useState<LicenseType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Clasificación
-  const [uso, setUso] = useState<'RESIDENCIAL' | 'MIXTO'>('RESIDENCIAL');
+  const [uso, setUso] = useState<UsoInmueble>('RESIDENCIAL');
   const [area, setArea] = useState('');
   const [centroHistorico, setCentroHistorico] = useState(false);
-  const [classification, setClassification] = useState<ClassificationResult | null>(null);
+  const [cambioUsoSuelo, setCambioUsoSuelo] = useState(false);
+  const [classification, setClassification] = useState<ClassifyResult | null>(null);
 
-  // Formulario del proyecto
   const [form, setForm] = useState({
     direccionExacta: '',
     zona: '1',
@@ -46,6 +54,14 @@ export default function NuevaSolicitudPage() {
     libro: '',
     nitPropietario: '',
     presupuestoEstimadoQ: '',
+    areaTerrenoM2: '',
+    descripcionTrabajos: '',
+    tiempoEjecucionAnios: '1',
+    talaArboles: false,
+    talaMotivo: '',
+    informeIndustrial: 'NONE' as 'NONE' | 'SIMPLE' | 'COMPLETO',
+    obraTipos: [] as string[],
+    aceptaConfidencialidadCom21: false,
   });
 
   useEffect(() => {
@@ -58,45 +74,47 @@ export default function NuevaSolicitudPage() {
       return;
     }
     api<LicenseType[]>('/license-types')
-      .then((types) => setLicenseType(types[0] ?? null))
+      .then((types) => setLicenseTypes(types))
       .catch(() => setError('No se pudo cargar el catálogo de licencias'));
   }, [user, router]);
 
-  /** Evalúa la clasificación F08 con la misma regla que el servidor. */
-  function evaluateClassification(): ClassificationResult {
-    const reasons: string[] = [];
-    const areaM2 = Number(area);
-    if (uso !== 'RESIDENCIAL') {
-      reasons.push('El uso del inmueble no es residencial unifamiliar (requiere formulario F02 u otro trámite)');
-    }
-    if (!areaM2 || areaM2 <= 0) {
-      reasons.push('Ingrese un área de construcción válida');
-    } else if (areaM2 > 700) {
-      reasons.push('El área supera los 700 m² permitidos para el formulario F08');
-    }
-    if (centroHistorico) {
-      reasons.push('Los inmuebles en Centro Histórico requieren dictamen del IDAEH y trámite presencial');
-    }
-    return { formCode: reasons.length === 0 ? 'F08' : null, available: reasons.length === 0, reasons };
-  }
+  const selectedLicenseType = useMemo(() => {
+    if (!classification?.licenseTypeCode) return null;
+    return licenseTypes.find((t) => t.code === classification.licenseTypeCode) ?? null;
+  }, [classification, licenseTypes]);
 
   function onClassify(e: FormEvent) {
     e.preventDefault();
-    const result = evaluateClassification();
+    const result = classifyProject({
+      uso,
+      areaConstruccionM2: Number(area),
+      centroHistorico,
+      cambioUsoSuelo,
+    });
     setClassification(result);
     if (result.available) setStep('formulario');
   }
 
+  function toggleObraTipo(id: string) {
+    setForm((f) => ({
+      ...f,
+      obraTipos: f.obraTipos.includes(id)
+        ? f.obraTipos.filter((x) => x !== id)
+        : [...f.obraTipos, id],
+    }));
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    if (!licenseType) return;
+    if (!selectedLicenseType || !classification?.formCode) return;
     setError(null);
     setLoading(true);
     try {
+      const isF02 = classification.formCode === 'F02';
       const created = await api<{ id: string }>('/applications', {
         method: 'POST',
         body: JSON.stringify({
-          licenseTypeId: licenseType.id,
+          licenseTypeId: selectedLicenseType.id,
           formData: {
             direccionExacta: form.direccionExacta,
             zona: form.zona,
@@ -104,12 +122,29 @@ export default function NuevaSolicitudPage() {
             niveles: Number(form.niveles),
             uso,
             centroHistorico,
+            cambioUsoSuelo,
             finca: form.finca,
             folio: form.folio,
             libro: form.libro,
             nitPropietario: form.nitPropietario,
             ...(form.presupuestoEstimadoQ
               ? { presupuestoEstimadoQ: Number(form.presupuestoEstimadoQ) }
+              : {}),
+            ...(form.areaTerrenoM2 !== ''
+              ? { areaTerrenoM2: Number(form.areaTerrenoM2) }
+              : {}),
+            ...(isF02
+              ? {
+                  descripcionTrabajos: form.descripcionTrabajos,
+                  tiempoEjecucionAnios: Number(form.tiempoEjecucionAnios),
+                  talaArboles: form.talaArboles,
+                  ...(form.talaArboles && form.talaMotivo
+                    ? { talaMotivo: form.talaMotivo }
+                    : {}),
+                  informeIndustrial: form.informeIndustrial,
+                  obraTipos: form.obraTipos,
+                  aceptaConfidencialidadCom21: form.aceptaConfidencialidadCom21,
+                }
               : {}),
           },
         }),
@@ -124,6 +159,7 @@ export default function NuevaSolicitudPage() {
   if (!user || user.role !== 'SOLICITANTE') return null;
 
   const allChecked = PRE_TRAMITE_LINKS.every((l) => checked[l.id]);
+  const formCode = classification?.formCode;
 
   return (
     <div className="min-h-screen">
@@ -131,16 +167,17 @@ export default function NuevaSolicitudPage() {
       <main className="mx-auto max-w-3xl p-6">
         <h1 className="text-2xl font-bold">Nueva solicitud de licencia</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {licenseType ? `${licenseType.code} — ${licenseType.name}` : 'Cargando…'}
+          {selectedLicenseType
+            ? `${selectedLicenseType.code} — ${selectedLicenseType.name}`
+            : 'Clasificación automática F08 / F02'}
         </p>
 
-        {/* Paso 1: Onboarding pre-trámite */}
         {step === 'onboarding' && (
           <section className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Paso 1 — Antes de iniciar</h2>
             <p className="mt-1 text-sm text-gray-600">
               Estos trámites son <strong>externos a la municipalidad</strong> y deben estar
-              listos antes de crear el expediente. La lista es orientativa y no bloquea el proceso.
+              listos antes de crear el expediente. La lista es orientativa y no bloquea el avance.
             </p>
             <ul className="mt-4 space-y-3">
               {PRE_TRAMITE_LINKS.map((link) => (
@@ -191,12 +228,12 @@ export default function NuevaSolicitudPage() {
           </section>
         )}
 
-        {/* Paso 2: Clasificación automática */}
         {step === 'clasificacion' && (
           <form onSubmit={onClassify} className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Paso 2 — Clasificación del proyecto</h2>
             <p className="mt-1 text-sm text-gray-600">
-              El sistema determina el formulario municipal aplicable (F08) según estos datos.
+              El sistema determina el formulario municipal aplicable (F08 o F02) según estos datos.
+              Proyectos mayores a 700 m² o en Centro Histórico requieren trámite presencial.
             </p>
 
             <div className="mt-4 space-y-4">
@@ -204,11 +241,13 @@ export default function NuevaSolicitudPage() {
                 <label className="block text-sm font-medium">Uso del inmueble</label>
                 <select
                   value={uso}
-                  onChange={(e) => setUso(e.target.value as 'RESIDENCIAL' | 'MIXTO')}
+                  onChange={(e) => setUso(e.target.value as UsoInmueble)}
                   className="mt-1 w-full rounded border px-3 py-2"
                 >
                   <option value="RESIDENCIAL">Residencial unifamiliar</option>
-                  <option value="MIXTO">Comercial / mixto / industrial</option>
+                  <option value="MIXTO">Mixto</option>
+                  <option value="COMERCIAL">Comercial</option>
+                  <option value="INDUSTRIAL">Industrial</option>
                 </select>
               </div>
               <div>
@@ -230,8 +269,19 @@ export default function NuevaSolicitudPage() {
                   onChange={(e) => setCentroHistorico(e.target.checked)}
                   className="h-4 w-4"
                 />
-                El inmueble está ubicado en el Centro Histórico
+                El inmueble está ubicado en Centro Histórico / conjunto histórico / amortiguamiento
               </label>
+              {uso === 'RESIDENCIAL' && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cambioUsoSuelo}
+                    onChange={(e) => setCambioUsoSuelo(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  El proyecto incluye cambio de uso de suelo
+                </label>
+              )}
             </div>
 
             {classification && !classification.available && (
@@ -269,13 +319,20 @@ export default function NuevaSolicitudPage() {
           </form>
         )}
 
-        {/* Paso 3: Datos del proyecto */}
-        {step === 'formulario' && (
+        {step === 'formulario' && formCode && (
           <form onSubmit={onCreate} className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Paso 3 — Datos del proyecto</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Formulario F08 · Profesional responsable: {user.fullName}
+              Formulario {formCode}
+              {selectedLicenseType ? ` · ${selectedLicenseType.code}` : ''} · Profesional
+              responsable: {user.fullName}
             </p>
+            {formCode === 'F02' && (
+              <p className="mt-2 rounded bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                Arancel provisional L-02 (base + % sobre presupuesto). Los documentos D-16…D-21 son
+                opcionales según el proyecto.
+              </p>
+            )}
 
             {error && (
               <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -317,6 +374,18 @@ export default function NuevaSolicitudPage() {
                   required
                   value={form.niveles}
                   onChange={(e) => setForm((f) => ({ ...f, niveles: e.target.value }))}
+                  className="mt-1 w-full rounded border px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Área del terreno (m², según RGP)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  required={formCode === 'F02'}
+                  value={form.areaTerrenoM2}
+                  onChange={(e) => setForm((f) => ({ ...f, areaTerrenoM2: e.target.value }))}
                   className="mt-1 w-full rounded border px-3 py-2"
                 />
               </div>
@@ -376,6 +445,109 @@ export default function NuevaSolicitudPage() {
                   Se usa para calcular la tasa municipal (base + % sobre presupuesto).
                 </p>
               </div>
+
+              {formCode === 'F02' && (
+                <>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium">
+                      Describa brevemente los trabajos, el uso y la solicitud
+                    </label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={form.descripcionTrabajos}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, descripcionTrabajos: e.target.value }))
+                      }
+                      className="mt-1 w-full rounded border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">
+                      Tiempo estimado de ejecución (años)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      required
+                      value={form.tiempoEjecucionAnios}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, tiempoEjecucionAnios: e.target.value }))
+                      }
+                      className="mt-1 w-full rounded border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Informe industrial</label>
+                    <select
+                      value={form.informeIndustrial}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          informeIndustrial: e.target.value as 'NONE' | 'SIMPLE' | 'COMPLETO',
+                        }))
+                      }
+                      className="mt-1 w-full rounded border px-3 py-2"
+                    >
+                      <option value="NONE">No aplica</option>
+                      <option value="SIMPLE">Informe industrial simple</option>
+                      <option value="COMPLETO">Informe industrial completo</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-sm font-medium">Tipo(s) de obra (F02 §5)</p>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {OBRA_TIPOS_F02.map((t) => (
+                        <label key={t.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={form.obraTipos.includes(t.id)}
+                            onChange={() => toggleObraTipo(t.id)}
+                            className="h-4 w-4"
+                          />
+                          {t.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2 space-y-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.talaArboles}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, talaArboles: e.target.checked }))
+                        }
+                        className="h-4 w-4"
+                      />
+                      El proyecto incluye tala de árboles
+                    </label>
+                    {form.talaArboles && (
+                      <input
+                        value={form.talaMotivo}
+                        onChange={(e) => setForm((f) => ({ ...f, talaMotivo: e.target.value }))}
+                        placeholder="Motivo de la tala"
+                        className="w-full rounded border px-3 py-2 text-sm"
+                      />
+                    )}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.aceptaConfidencialidadCom21}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            aceptaConfidencialidadCom21: e.target.checked,
+                          }))
+                        }
+                        className="h-4 w-4"
+                      />
+                      Entrego la información bajo garantía de confidencialidad (Acuerdo COM-21-2026)
+                    </label>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -388,7 +560,7 @@ export default function NuevaSolicitudPage() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !selectedLicenseType}
                 className="rounded bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
               >
                 {loading ? 'Creando…' : 'Crear borrador del expediente'}

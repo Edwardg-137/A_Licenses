@@ -444,7 +444,7 @@ export default function ExpedienteDetailPage() {
                 </div>
                 <dl className="mt-3 space-y-1 text-sm text-yellow-900">
                   <div className="flex justify-between">
-                    <dt>Base (tarifa F08)</dt>
+                    <dt>Base (tarifa provisional)</dt>
                     <dd>Q {Number(detail.payment.breakdown.base ?? 0).toFixed(2)}</dd>
                   </div>
                   <div className="flex justify-between">
@@ -565,6 +565,47 @@ export default function ExpedienteDetailPage() {
                   <dt className="text-gray-500">Uso</dt>
                   <dd className="font-medium">{String(detail.formData.uso)}</dd>
                 </div>
+                {detail.formData.areaTerrenoM2 != null && (
+                  <div>
+                    <dt className="text-gray-500">Área del terreno</dt>
+                    <dd className="font-medium">{String(detail.formData.areaTerrenoM2)} m²</dd>
+                  </div>
+                )}
+                {detail.formData.descripcionTrabajos != null &&
+                  String(detail.formData.descripcionTrabajos).trim() !== '' && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-gray-500">Descripción de trabajos</dt>
+                    <dd className="font-medium whitespace-pre-wrap">
+                      {String(detail.formData.descripcionTrabajos)}
+                    </dd>
+                  </div>
+                )}
+                {detail.formData.tiempoEjecucionAnios != null && (
+                  <div>
+                    <dt className="text-gray-500">Tiempo de ejecución</dt>
+                    <dd className="font-medium">
+                      {String(detail.formData.tiempoEjecucionAnios)} año(s)
+                    </dd>
+                  </div>
+                )}
+                {detail.formData.informeIndustrial != null &&
+                  detail.formData.informeIndustrial !== 'NONE' && (
+                  <div>
+                    <dt className="text-gray-500">Informe industrial</dt>
+                    <dd className="font-medium">{String(detail.formData.informeIndustrial)}</dd>
+                  </div>
+                )}
+                {detail.formData.talaArboles === true && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-gray-500">Tala de árboles</dt>
+                    <dd className="font-medium">
+                      Sí
+                      {detail.formData.talaMotivo
+                        ? ` — ${String(detail.formData.talaMotivo)}`
+                        : ''}
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-gray-500">RGP (finca / folio / libro)</dt>
                   <dd className="font-medium">
@@ -659,6 +700,11 @@ export default function ExpedienteDetailPage() {
                         <div>
                           <p className="text-sm font-medium">
                             {req.code} — {req.name}
+                            {!req.required && (
+                              <span className="ml-2 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                                Opcional
+                              </span>
+                            )}
                             {isPagoStage && (
                               <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
                                 Se carga en la fase de pago

@@ -57,7 +57,7 @@ export default function SolicitantePage() {
           <div>
             <h1 className="text-2xl font-bold">Mis expedientes</h1>
             <p className="text-sm text-gray-600">
-              Licencias de construcción — Obra Mayor, Vivienda Unifamiliar (F08)
+              Licencias de construcción — F08 (vivienda unifamiliar) y F02 (comercial / mixto / general)
             </p>
           </div>
           <Link

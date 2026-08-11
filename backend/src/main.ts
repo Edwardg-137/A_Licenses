@@ -22,7 +22,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('PermisoGT API')
     .setDescription(
-      'API REST del sistema de expedientes digitales municipales (MVP L-01 / F08). ' +
+      'API REST del sistema de expedientes digitales municipales (L-01/F08 y L-02/F02). ' +
         'Autenticación JWT Bearer; la mayoría de endpoints requieren rol. ' +
         'La verificación pública de licencias no exige token.',
     )

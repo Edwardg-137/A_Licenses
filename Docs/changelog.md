@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-11 — Inc. A: clasificación F08/F02 y tipo L-02
+
+- **Descripción:** Clasificador multi-formulario (D-016): F08/L-01 para residencial unifamiliar ≤700 m²; F02/L-02 para mixto/comercial/industrial (o residencial con cambio de uso) entre 31–700 m²; rechazo en línea si área >700 o Centro Histórico. Seed L-02 con D-01…D-15 (D-14=F02) y D-16…D-21 opcionales; `feeFormula` provisional distinta. Wizard frontend con usos ampliados y campos F02. L-01 sin cambio de comportamiento.
+- **Documentos:** `implementations/2026-08-ampliacion-tipos-formularios-mapeo.md`; `status/general.md`, `structure.md`, `architecture.md`, `decisions.md` (D-016).
+- **Verificación:** ✅ `tsc` backend/frontend OK; seed crea L-01 y L-02.
+- **Impacto:** Amplía el alcance en línea a comercial/mixto vía F02; F11/F04 siguen pendientes.
+
 ## 2026-08-10 — Fase 6: Dashboard Admin, Swagger y checklist OWASP
 
 - **Descripción:** Módulo `reports` con `GET /reports/dashboard` (solo ADMIN): KPIs, expedientes por estado, tiempo promedio por fase (auditoría), documentos más observados y actividad reciente. Frontend `/admin` con visualización de métricas. Swagger UI en `/api/docs` (`@nestjs/swagger@7`, D-015). Checklist OWASP Top 10 en `Docs/security/owasp-checklist.md`. UX: Header unificado en Admin, redirección post-login al dashboard.

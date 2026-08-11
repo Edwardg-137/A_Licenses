@@ -44,8 +44,8 @@ export class PaymentsService {
         total,
         nota:
           presupuesto > 0
-            ? 'Tasa = base + presupuesto estimado x porcentaje (tarifa F08 provisional)'
-            : 'Sin presupuesto estimado registrado: se cobra solo la base (tarifa F08 provisional)',
+            ? 'Tasa = base + presupuesto estimado x porcentaje (tarifa provisional del tipo de licencia)'
+            : 'Sin presupuesto estimado registrado: se cobra solo la base (tarifa provisional del tipo de licencia)',
       },
     };
   }

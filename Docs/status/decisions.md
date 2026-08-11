@@ -138,3 +138,12 @@
 - **Decisión:** Integrar `@nestjs/swagger@7` + `swagger-ui-express` en `/api/docs` para desarrollo y staging. En producción se debe desactivar el setup o protegerlo (red privada / auth básica).
 - **Justificación:** Cumple el entregable del plan sin acoplar generadores externos; v7 es compatible con NestJS 10.
 - **Consecuencias:** Queda registrado en el checklist OWASP (A05). No se anotan todos los DTOs en esta fase; los tags del DocumentBuilder organizan los módulos.
+
+## D-016 — Clasificación multi-formulario F08 / F02 (L-01 / L-02)
+
+- **Fecha:** 2026-08-11
+- **Contexto:** El MVP solo admitía F08; el producto amplía tipos con formularios municipales reales (F02 V12).
+- **Problema:** Cómo enrutar solicitudes sin romper L-01 y sin abrir aún F11/F04.
+- **Decisión:** Clasificador compartido: F08 si residencial unifamiliar sin cambio de uso y ≤700 m²; F02 (L-02) si mixto/comercial/industrial o residencial con cambio de uso, con área 31–700 m². Rechazo en línea si área >700 o Centro Histórico. Seed L-02 con D-01…D-15 (D-14=F02) y D-16…D-21 opcionales; arancel provisional distinto. F11/F04 quedan para incrementos posteriores (decisiones de producto ya fijadas en el mapeo).
+- **Justificación:** Alinea el asistente con la práctica VU sin bloquear el flujo L-01; extras opcionales evitan exigir docs sin guía VU completa.
+- **Consecuencias:** Frontend y backend deben mantener la misma regla (`classification.ts`). Hay que re-ejecutar el seed para crear L-02 en bases existentes.
