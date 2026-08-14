@@ -147,3 +147,16 @@
 - **Decisión:** Clasificador compartido: F08 si residencial unifamiliar sin cambio de uso y ≤700 m²; F02 (L-02) si mixto/comercial/industrial o residencial con cambio de uso, con área 31–700 m². Rechazo en línea si área >700 o Centro Histórico. Seed L-02 con D-01…D-15 (D-14=F02) y D-16…D-21 opcionales; arancel provisional distinto. F11/F04 quedan para incrementos posteriores (decisiones de producto ya fijadas en el mapeo).
 - **Justificación:** Alinea el asistente con la práctica VU sin bloquear el flujo L-01; extras opcionales evitan exigir docs sin guía VU completa.
 - **Consecuencias:** Frontend y backend deben mantener la misma regla (`classification.ts`). Hay que re-ejecutar el seed para crear L-02 en bases existentes.
+
+## D-017 — Validación inteligente: NIT local, geocoder Google, visión Gemini, no auto-aprobar
+
+- **Fecha:** 2026-08-14
+- **Contexto:** El MVP solo validaba campos no vacíos y MIME. Se necesita comprobar que el NIT y la dirección sean plausibles y que los documentos (DPI, F08/F02, etc.) coincidan con el requisito.
+- **Problema:** No hay APIs públicas confiables de SAT/RENAP/RGP. Hay que elegir motor y política de bloqueo sin sustituir al revisor.
+- **Decisión:** Combinación del plan de validación inteligente:
+  1. **NIT (A1):** dígito verificador SAT en local (`CF` admitido). No se consulta SAT.
+  2. **Dirección (A5):** Google Geocoding si hay `GOOGLE_MAPS_API_KEY`; si no, heurística local (A4) como respaldo.
+  3. **Documentos (B1):** calidad local (`sharp` / `pdf-lib`) + Gemini Flash (`GEMINI_API_KEY`) con checklist JSON por código D-xx. DWG no pasa por IA.
+  4. **Política (C1 + fail de alta confianza):** `fail` impide crear/enviar; `warn` deja continuar y se muestra al revisor. Nunca se marca un documento como conforme automáticamente.
+- **Justificación:** Máximo valor sin convenios oficiales; adaptadores intercambiables; el revisor sigue siendo la autoridad.
+- **Consecuencias:** Variables `GOOGLE_MAPS_API_KEY` y `GEMINI_API_KEY` opcionales. Sin claves, NIT/heurística/calidad siguen activos y la visión se omite con `warn`. PII (DPI/NIT) puede enviarse a Google Gemini cuando hay clave.

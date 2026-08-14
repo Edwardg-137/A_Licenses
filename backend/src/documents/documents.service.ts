@@ -4,11 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ApplicationStatus } from '@prisma/client';
+import { ApplicationStatus, Prisma } from '@prisma/client';
 // file-type fijado en v16 (última versión CommonJS — decisión D-008);
 // sus tipos vienen de @types/file-type y exponen la API legacy fromBuffer.
 import { fromBuffer as fileTypeFromBuffer } from 'file-type';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { ContentValidationService } from '../content-validation/content-validation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from './storage.service';
 
@@ -46,6 +47,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly contentValidation: ContentValidationService,
   ) {}
 
   /**
@@ -160,6 +162,13 @@ export class DocumentsService {
       file.originalname,
     );
 
+    const contentCheck = await this.contentValidation.analyzeDocument({
+      buffer: file.buffer,
+      mimeType,
+      requirementCode: requirement.code,
+      formCode: application.formCode,
+    });
+
     // Versionado: se desactiva el documento vigente y se crea la nueva versión
     const current = await this.prisma.applicationDocument.findFirst({
       where: { applicationId, requirementId, isCurrent: true },
@@ -175,6 +184,7 @@ export class DocumentsService {
           storagePath,
           mimeType,
           sizeBytes: file.size,
+          contentCheck: contentCheck as unknown as Prisma.InputJsonValue,
         },
       }),
       ...(current
@@ -205,6 +215,7 @@ export class DocumentsService {
       mimeType: document.mimeType,
       sizeBytes: document.sizeBytes,
       uploadedAt: document.uploadedAt,
+      contentCheck,
     };
   }
 

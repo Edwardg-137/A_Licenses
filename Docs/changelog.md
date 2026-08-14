@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-14 — Modelo Gemini por defecto (visión documental)
+
+- **Descripción:** `GEMINI_MODEL` pasa a `gemini-3.6-flash`. `gemini-2.0-flash` está apagado y `gemini-2.5-flash` rechaza claves nuevas (HTTP 404).
+- **Documentos:** `implementations/2026-08-validacion-inteligente.md`.
+- **Verificación:** upload D-02 con clave gratuita devolvía 404 de modelo; el id vigente es el sucesor Flash de 2026.
+- **Impacto:** Sin este cambio, la clasificación documental no corre aunque `GEMINI_API_KEY` esté bien.
+
+## 2026-08-14 — Validación inteligente de formulario y documentos (D-017)
+
+- **Descripción:** NIT con dígito SAT, dirección heurística o Google Geocoding, calidad de imagen/PDF y análisis semántico opcional con Gemini por código D-01…D-21. Semáforo en solicitante y revisor; `fail` bloquea envío; `warn` no. Cruces formulario/documentos.
+- **Documentos:** `implementations/2026-08-validacion-inteligente.md`; `status/general.md`, `structure.md`, `architecture.md`, `decisions.md` (D-017).
+- **Verificación:** `tsc` backend/frontend OK; migración `formValidation`/`contentCheck` aplicada.
+- **Impacto:** El revisor sigue siendo la autoridad; SAT/RENAP no se consultan.
+
 ## 2026-08-11 — Inc. A: clasificación F08/F02 y tipo L-02
 
 - **Descripción:** Clasificador multi-formulario (D-016): F08/L-01 para residencial unifamiliar ≤700 m²; F02/L-02 para mixto/comercial/industrial (o residencial con cambio de uso) entre 31–700 m²; rechazo en línea si área >700 o Centro Histórico. Seed L-02 con D-01…D-15 (D-14=F02) y D-16…D-21 opcionales; `feeFormula` provisional distinta. Wizard frontend con usos ampliados y campos F02. L-01 sin cambio de comportamiento.

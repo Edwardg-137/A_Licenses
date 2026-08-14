@@ -37,6 +37,7 @@ c:\building_permits\
 | `src/prisma/` | `PrismaService` global (conexión a BD) |
 | `src/auth/` | Registro, login, refresh (rotatorio), logout; estrategia JWT; guards `JwtAuthGuard`/`RolesGuard`; decoradores `@Public()`, `@Roles()`, `@CurrentUser()` |
 | `src/users/` | Gestión de usuarios por el Admin: listar, crear internos, aprobar solicitantes, activar/desactivar |
+| `src/content-validation/` | Validación inteligente (D-017): NIT SAT, dirección (heurística/Google), calidad de imagen, visión Gemini, cruces formulario/documentos |
 | `src/applications/` | Expedientes: clasificación F08/F02 (`classification.ts`), creación, listados, validar/enviar, asignación de revisor |
 | `src/documents/` | Carga de documentos con detección de MIME por contenido, versionado, descarga autenticada; `StorageService` (disco local, único punto de contacto con el FS); en `EN_CORRECCION` solo acepta reemplazos de documentos observados |
 | `src/review/` | Revisión técnica: marcar documentos (✅/⚠️/❌ con texto y prioridad), enviar a corrección, aprobar, rechazar con dictamen y reenvío del solicitante; reglas de rondas (D-010, D-011) |
@@ -63,14 +64,15 @@ Módulos previstos del plan MVP: todos implementados (auth, users, applications,
 | `src/app/admin/` | Dashboard de métricas del Admin (KPIs, estados, tiempos, documentos observados, actividad) |
 | `src/app/admin/usuarios/` | Panel del Admin: aprobar solicitantes, crear/activar/desactivar usuarios |
 | `src/app/solicitante/` | Dashboard del solicitante (sus expedientes) |
-| `src/app/solicitante/nueva/` | Asistente: onboarding → clasificación F08/F02 → datos del proyecto (campos extra F02) |
-| `src/lib/classification.ts` | Espejo de la regla de clasificación del backend |
+| `src/app/solicitante/nueva/` | Asistente: onboarding → clasificación F08/F02 → datos del proyecto (NIT/dirección, campos extra F02) |
 | `src/app/solicitante/expedientes/[id]/` | Expediente: datos, carga/verificación/envío; corrección; visitas; pago; descarga de licencia PDF + enlace de verificación; solicitud de recepción de obra; historial de rondas |
 | `src/app/revisor/` | Bandeja de expedientes con filtros por estado y fecha (revisor y admin) |
 | `src/app/revisor/expedientes/[id]/` | Revisión documental, alineación, confirmación de pago (emite licencia), descarga/backfill de licencia, historial de rondas e inspecciones |
 | `src/app/inspector/` | Agenda del inspector: solicitudes pendientes, propuesta de fechas, registro de resultado con foto de evidencia |
 | `src/app/verificar/[token]/` | Vista pública de verificación de licencia por QR (sin login) |
-| `src/components/` | `Header` (navegación por rol), `StatusBadge` (etiquetas de estado), `RoundsHistory` (observaciones agrupadas por ronda) |
+| `src/components/` | `Header` (navegación por rol), `StatusBadge`, `RoundsHistory`, `CheckPill` (semáforo de validación) |
+| `src/lib/content-check.ts` | Tipos compartidos del informe de validación de contenido |
+| `src/lib/classification.ts` | Espejo de la regla de clasificación del backend |
 | `src/lib/api.ts` | Cliente HTTP con Bearer token, refresh automático, upload multipart y descarga como Blob |
 | `src/lib/constants.ts` | Etiquetas/colores de estados, zonas de Guatemala, enlaces del onboarding |
 | `src/lib/auth-store.ts` | Estado de sesión (Zustand, persistido en localStorage) |

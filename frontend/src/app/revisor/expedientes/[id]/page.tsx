@@ -3,9 +3,11 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/Header';
+import CheckPill from '@/components/CheckPill';
 import RoundsHistory, { ObservationItem } from '@/components/RoundsHistory';
 import StatusBadge from '@/components/StatusBadge';
 import { api, ApiError, downloadLicensePdf, openDocumentPreview } from '@/lib/api';
+import { ContentCheck, CrossCheckIssue, FormValidation } from '@/lib/content-check';
 import { useAuthStore } from '@/lib/auth-store';
 
 interface CurrentDocument {
@@ -18,6 +20,7 @@ interface CurrentDocument {
   uploadedAt: string;
   reviewStatus: string;
   replacedAfterObservation: boolean;
+  contentCheck?: ContentCheck;
 }
 
 interface InspectionItem {
@@ -87,6 +90,8 @@ interface ApplicationDetail {
   inspections: InspectionItem[];
   payment: PaymentInfo | null;
   license: LicenseInfo | null;
+  formValidation?: FormValidation;
+  crossCheck?: CrossCheckIssue[];
 }
 
 const INSPECTION_TYPE_LABEL: Record<string, string> = {
@@ -351,7 +356,12 @@ export default function RevisorExpedientePage() {
             </div>
 
             <section className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">Datos del proyecto</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Datos del proyecto</h2>
+                {detail.formValidation?.overall && (
+                  <CheckPill status={detail.formValidation.overall} />
+                )}
+              </div>
               <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-gray-500">Dirección</dt>
@@ -427,6 +437,9 @@ export default function RevisorExpedientePage() {
                                 <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
                                   ✓ Reemplazado en esta ronda
                                 </span>
+                              )}
+                              {doc.contentCheck?.overall && (
+                                <CheckPill status={doc.contentCheck.overall} label="Análisis automático" />
                               )}
                             </div>
                           )}
@@ -524,10 +537,33 @@ export default function RevisorExpedientePage() {
                           </div>
                         </div>
                       )}
+                      {doc?.contentCheck?.issues && doc.contentCheck.issues.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-xs">
+                          {doc.contentCheck.issues.map((issue, idx) => (
+                            <li
+                              key={`${issue.code}-${idx}`}
+                              className={issue.severity === 'fail' ? 'text-red-700' : 'text-yellow-800'}
+                            >
+                              Automático: {issue.message}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
               </ul>
+
+              {detail.crossCheck && detail.crossCheck.length > 0 && (
+                <div className="mt-4 rounded border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+                  <p className="font-medium">Cruces formulario / documentos</p>
+                  <ul className="mt-1 list-inside list-disc">
+                    {detail.crossCheck.map((issue) => (
+                      <li key={issue.message}>{issue.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Acciones de revisión */}
               {inReview && canReview && (

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,6 +16,7 @@ import { ApplicationsService } from './applications.service';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
 import { CreateApplicationDto, UpdateApplicationDto } from './dto/create-application.dto';
 import { ListApplicationsDto } from './dto/list-applications.dto';
+import { ValidateFormDto } from '../content-validation/dto/validate-form.dto';
 
 @Controller()
 export class ApplicationsController {
@@ -24,6 +26,17 @@ export class ApplicationsController {
   @Get('license-types')
   listLicenseTypes(@CurrentUser() user: AuthenticatedUser) {
     return this.applications.listLicenseTypes(user.tenantId);
+  }
+
+  /** Valida NIT, dirección y RGP sin crear expediente (paso 3). */
+  @Post('applications/validate-form')
+  @HttpCode(200)
+  @Roles('SOLICITANTE')
+  validateForm(
+    @CurrentUser() _user: AuthenticatedUser,
+    @Body() dto: ValidateFormDto,
+  ) {
+    return this.applications.previewFormValidation(dto);
   }
 
   @Post('applications')

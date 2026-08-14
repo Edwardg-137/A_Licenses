@@ -36,7 +36,7 @@ Arquitectura multi-tenant preparada para más municipios. F11 (L-03) y F04 (L-06
 - **Guards globales**: autenticación JWT en todos los endpoints (salvo `@Public()`) y autorización por rol (`@Roles(...)`).
 - **Gestión de usuarios (solo ADMIN):** listar con filtros, crear usuarios internos (Revisor/Inspector), aprobar solicitantes, activar/desactivar.
 - **Frontend:** páginas de login, registro, panel de administración de usuarios, asistente de nueva solicitud (onboarding pre-trámite + clasificación **F08/F02** + datos del proyecto), expediente con carga/verificación/envío de documentos, y bandeja del revisor con filtros.
-- **Expedientes:** creación con clasificación automática F08 (vivienda unifamiliar ≤ 700 m²) o F02 (mixto/comercial/industrial u obra con cambio de uso, 31–700 m²); rechazo en línea si área > 700 m² o Centro Histórico; formulario del proyecto (campos extra F02); carga de documentos con validación de MIME **por contenido**, versionado por reemplazo, "Verificar antes de enviar", envío con transición `BORRADOR → OBSERVADO_FORMATO / EN_REVISION_TECNICA`.
+- **Expedientes:** creación con clasificación automática F08 (vivienda unifamiliar ≤ 700 m²) o F02 (mixto/comercial/industrial u obra con cambio de uso, 31–700 m²); rechazo en línea si área > 700 m² o Centro Histórico; formulario del proyecto (campos extra F02) con **validación de NIT (dígito SAT)** y **dirección** (heurística y, si hay clave, Google Geocoding); carga de documentos con validación de MIME **por contenido**, calidad de imagen/PDF, análisis semántico opcional (Gemini) por código D-xx, versionado por reemplazo, "Verificar antes de enviar", envío con transición `BORRADOR → OBSERVADO_FORMATO / EN_REVISION_TECNICA`.
 - **Documentos L-02:** D-01…D-15 (D-14 = F02) obligatorios + D-16…D-21 opcionales (FGU, CONRED, seguridad, EMPAGUA, informe industrial, tala).
 - **Documentos:** almacenamiento en disco local con nombres UUID (decisión D-007), descarga/preview autenticado con streaming; PDF/JPG se abren en pestaña nueva, **DWG solo descarga** (conversión a imagen pendiente de un servicio conversor externo).
 - **Revisión técnica (ciclo de correcciones):** el revisor marca cada documento ✅ Conforme / ⚠️ Con observación / ❌ Requiere reemplazo, con texto y prioridad (Alta/Media/Baja); envía a corrección (`EN_CORRECCION`); el solicitante solo puede reemplazar los documentos observados y reenvía; el revisor distingue en verde los documentos reemplazados; máximo de rondas configurable (3 por defecto), en la ronda final solo cabe aprobar (`ALINEACION_PROGRAMADA`) o rechazar con dictamen (`RECHAZADO`). Historial de rondas visible para ambas partes (decisión D-010).
@@ -63,10 +63,12 @@ Arquitectura multi-tenant preparada para más municipios. F11 (L-03) y F04 (L-06
 - Las fotos de evidencia de inspección no pasan por validación de MIME por contenido (a diferencia de los documentos del expediente, D-009).
 - El correo con la licencia adjunta está aplazado (D-003); la notificación es in-app y la descarga desde el portal.
 - El tenant es único (slug `guatemala` desde `.env`); el multi-municipio activo es de fase posterior.
+- La validación inteligente **no consulta SAT/RENAP/RGP**. El NIT solo verifica dígito SAT; sin `GOOGLE_MAPS_API_KEY` la dirección es heurística; sin `GEMINI_API_KEY` no hay clasificación semántica de documentos (queda aviso para el revisor). Los DWG no pasan por visión.
+- Enviar DPI/NIT a Gemini (si hay clave) implica PII en un tercero (D-017).
 
 ## Tecnologías
 
-- **Backend:** NestJS 10 (TypeScript), Prisma 5, PostgreSQL 16, JWT (passport-jwt), bcryptjs.
+- **Backend:** NestJS 10 (TypeScript), Prisma 5, PostgreSQL 16, JWT (passport-jwt), bcryptjs, sharp, pdf-lib. Opcional: Google Geocoding y Gemini Flash.
 - **Frontend:** Next.js 14 (App Router, `output: 'standalone'` para Docker), React 18, Tailwind CSS 3, Zustand (estado de sesión persistido).
 - **Contenedores:** Docker Compose (servicios `db`, `backend`, `frontend`) — decisión D-013. Alternativa: Postgres/Node nativos en Windows.
 

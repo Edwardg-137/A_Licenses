@@ -197,6 +197,8 @@ model Application {
   // Datos del proyecto (formulario 04-tipos-licencia §2.2):
   // dirección, zona, m², niveles, uso, finca/folio/libro, NIT, colegiado...
   formData Json @default("{}")
+  // Resultado de validación inteligente del formulario (D-017): NIT, dirección, RGP
+  formValidation Json @default("{}")
 
   correctionRound Int       @default(0)
   rejectedReason  String? // dictamen en caso de rechazo
@@ -233,6 +235,8 @@ model ApplicationDocument {
   mimeType      String
   sizeBytes     Int
   reviewStatus  DocumentReviewStatus @default(PENDIENTE)
+  // Calidad + visión + campos extraídos (D-017)
+  contentCheck  Json                 @default("{}")
   uploadedAt    DateTime             @default(now())
 
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)

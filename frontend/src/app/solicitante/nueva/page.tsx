@@ -3,7 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
+import CheckPill from '@/components/CheckPill';
 import { api, ApiError } from '@/lib/api';
+import { FormValidation } from '@/lib/content-check';
 import { useAuthStore } from '@/lib/auth-store';
 import {
   classifyProject,
@@ -38,6 +40,8 @@ export default function NuevaSolicitudPage() {
   const [licenseTypes, setLicenseTypes] = useState<LicenseType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkingForm, setCheckingForm] = useState(false);
+  const [formValidation, setFormValidation] = useState<FormValidation | null>(null);
 
   const [uso, setUso] = useState<UsoInmueble>('RESIDENCIAL');
   const [area, setArea] = useState('');
@@ -104,12 +108,47 @@ export default function NuevaSolicitudPage() {
     }));
   }
 
+  async function runFormValidation(): Promise<FormValidation | null> {
+    setCheckingForm(true);
+    try {
+      const result = await api<FormValidation>('/applications/validate-form', {
+        method: 'POST',
+        body: JSON.stringify({
+          direccionExacta: form.direccionExacta,
+          zona: form.zona,
+          nitPropietario: form.nitPropietario,
+          finca: form.finca,
+          folio: form.folio,
+          libro: form.libro,
+        }),
+      });
+      setFormValidation(result);
+      return result;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo validar el formulario');
+      return null;
+    } finally {
+      setCheckingForm(false);
+    }
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!selectedLicenseType || !classification?.formCode) return;
     setError(null);
     setLoading(true);
     try {
+      const preview = await runFormValidation();
+      if (preview?.overall === 'fail') {
+        setError(
+          [preview.nit, preview.address, preview.rgp]
+            .filter((f) => f.status === 'fail')
+            .map((f) => f.message)
+            .join(' '),
+        );
+        setLoading(false);
+        return;
+      }
       const isF02 = classification.formCode === 'F02';
       const created = await api<{ id: string }>('/applications', {
         method: 'POST',
@@ -350,6 +389,25 @@ export default function NuevaSolicitudPage() {
                   className="mt-1 w-full rounded border px-3 py-2"
                   placeholder="Ej. 8a. Avenida 12-34, zona 9"
                 />
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void runFormValidation()}
+                    disabled={checkingForm}
+                    className="rounded border px-2 py-1 text-xs hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {checkingForm ? 'Verificando…' : 'Verificar dirección y NIT'}
+                  </button>
+                  {formValidation?.address && (
+                    <CheckPill
+                      status={formValidation.address.status}
+                      label={formValidation.address.message}
+                    />
+                  )}
+                </div>
+                {formValidation?.address.status !== 'ok' && formValidation?.address.message && (
+                  <p className="mt-1 text-xs text-yellow-800">{formValidation.address.message}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium">Zona</label>
@@ -422,8 +480,21 @@ export default function NuevaSolicitudPage() {
                   required
                   value={form.nitPropietario}
                   onChange={(e) => setForm((f) => ({ ...f, nitPropietario: e.target.value }))}
+                  onBlur={() => {
+                    if (form.nitPropietario.trim()) void runFormValidation();
+                  }}
                   className="mt-1 w-full rounded border px-3 py-2"
+                  placeholder="Ej. 1234567-8 o CF"
                 />
+                {formValidation?.nit && (
+                  <p
+                    className={`mt-1 text-xs ${
+                      formValidation.nit.status === 'fail' ? 'text-red-700' : 'text-gray-600'
+                    }`}
+                  >
+                    {formValidation.nit.message}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium">

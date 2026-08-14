@@ -12,6 +12,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { ReviewModule } from './review/review.module';
+import { ContentValidationModule } from './content-validation/content-validation.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -29,6 +30,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     PaymentsModule,
     LicensesModule,
     ReportsModule,
+    ContentValidationModule,
   ],
   providers: [
     // Autenticación global: todo endpoint requiere JWT salvo que se marque @Public()

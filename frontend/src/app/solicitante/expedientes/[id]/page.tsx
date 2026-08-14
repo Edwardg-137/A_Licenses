@@ -3,9 +3,11 @@
 import { useParams, useRouter } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
+import CheckPill from '@/components/CheckPill';
 import RoundsHistory, { ObservationItem } from '@/components/RoundsHistory';
 import StatusBadge from '@/components/StatusBadge';
 import { api, apiUpload, ApiError, downloadLicensePdf, openDocumentPreview } from '@/lib/api';
+import { ContentCheck, CrossCheckIssue, FormValidation } from '@/lib/content-check';
 import { useAuthStore } from '@/lib/auth-store';
 
 interface Requirement {
@@ -27,6 +29,7 @@ interface CurrentDocument {
   sizeBytes: number;
   uploadedAt: string;
   reviewStatus: string;
+  contentCheck?: ContentCheck;
 }
 
 interface ValidationItem {
@@ -35,6 +38,7 @@ interface ValidationItem {
   valid: boolean;
   issues: string[];
   stage: string;
+  contentOverall?: string;
 }
 
 interface InspectionItem {
@@ -90,6 +94,8 @@ interface ApplicationDetail {
   documents: CurrentDocument[];
   observations: ObservationItem[];
   validationReport: ValidationItem[];
+  crossCheck?: CrossCheckIssue[];
+  formValidation?: FormValidation;
   inspections: InspectionItem[];
   payment: PaymentInfo | null;
   license: LicenseInfo | null;
@@ -543,11 +549,19 @@ export default function ExpedienteDetailPage() {
 
             {/* Datos del proyecto */}
             <section className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">Datos del proyecto</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Datos del proyecto</h2>
+                {detail.formValidation?.overall && (
+                  <CheckPill status={detail.formValidation.overall} />
+                )}
+              </div>
               <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-gray-500">Dirección</dt>
                   <dd className="font-medium">{String(detail.formData.direccionExacta ?? '—')}</dd>
+                  {detail.formValidation?.address?.message && (
+                    <p className="mt-0.5 text-xs text-gray-500">{detail.formValidation.address.message}</p>
+                  )}
                 </div>
                 <div>
                   <dt className="text-gray-500">Zona / Municipio</dt>
@@ -616,6 +630,9 @@ export default function ExpedienteDetailPage() {
                 <div>
                   <dt className="text-gray-500">NIT del propietario</dt>
                   <dd className="font-medium">{String(detail.formData.nitPropietario)}</dd>
+                  {detail.formValidation?.nit?.message && (
+                    <p className="mt-0.5 text-xs text-gray-500">{detail.formValidation.nit.message}</p>
+                  )}
                 </div>
                 <div>
                   <dt className="text-gray-500">Profesional responsable</dt>
@@ -732,9 +749,15 @@ export default function ExpedienteDetailPage() {
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {report && !isPagoStage && !inCorrection && (
-                            <span className="text-lg" title={report.valid ? 'Conforme' : report.issues.join('; ')}>
-                              {report.valid ? '✅' : '⚠️'}
-                            </span>
+                            <CheckPill
+                              status={
+                                report.valid
+                                  ? report.contentOverall === 'warn'
+                                    ? 'warn'
+                                    : 'ok'
+                                  : 'fail'
+                              }
+                            />
                           )}
                           {canUpload && (
                             <>
@@ -753,7 +776,7 @@ export default function ExpedienteDetailPage() {
                                 className="rounded border px-3 py-1.5 text-sm hover:bg-gray-100 disabled:opacity-50"
                               >
                                 {uploadingId === req.id
-                                  ? 'Subiendo…'
+                                  ? 'Analizando…'
                                   : doc
                                     ? 'Reemplazar'
                                     : 'Cargar archivo'}
@@ -790,11 +813,40 @@ export default function ExpedienteDetailPage() {
                           ))}
                         </ul>
                       )}
+                      {doc?.contentCheck?.issues && doc.contentCheck.issues.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-xs">
+                          {doc.contentCheck.issues.map((issue, idx) => (
+                            <li
+                              key={`${issue.code}-${idx}`}
+                              className={issue.severity === 'fail' ? 'text-red-700' : 'text-yellow-800'}
+                            >
+                              {issue.severity === 'fail' ? 'Bloquea envío: ' : 'Aviso: '}
+                              {issue.message}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
               </ul>
             </section>
+
+            {detail.crossCheck && detail.crossCheck.length > 0 && (
+              <section className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-6">
+                <h2 className="text-lg font-semibold text-yellow-900">
+                  Consistencia formulario / documentos
+                </h2>
+                <ul className="mt-2 list-inside list-disc text-sm text-yellow-900">
+                  {detail.crossCheck.map((issue) => (
+                    <li key={issue.message}>
+                      {issue.severity === 'fail' ? 'Debe corregir: ' : 'Revisar: '}
+                      {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <RoundsHistory observations={detail.observations} />
           </>

@@ -46,8 +46,9 @@ La máquina de estados del expediente (`ApplicationStatus`) sigue `mvp_docs/03-f
 
 ### Documentos
 
-- **Upload:** multipart (Multer 2, memoria, límite 25 MB) → detección de MIME por contenido → persistencia en disco vía `StorageService` → registro versionado (`ApplicationDocument`, uno solo `isCurrent` por requisito).
+- **Upload:** multipart (Multer 2, memoria, límite 25 MB) → detección de MIME por contenido → calidad local (`sharp`/`pdf-lib`) → visión Gemini si hay clave → persistencia en disco vía `StorageService` → `contentCheck` JSON en el documento.
 - **Validación de formato real (D-009):** `file-type` v16 para buffers normales; respaldo de firmas mínimas (`%PDF`, JPEG, PNG) para archivos cortos; firma ASCII `AC` para DWG. Si el contenido detectado contradice lo declarado por el cliente, se rechaza con HTTP 400.
+- **Validación de contenido (D-017):** NIT local; dirección heurística o Google Geocoding; checklist por código D-xx. `fail` de alta confianza impide enviar (`OBSERVADO_FORMATO`); `warn` no bloquea y se muestra al revisor. Nunca auto-aprueba.
 - **Descarga:** `GET /documents/:id/download` autenticado, streaming con `Content-Disposition: inline` (el navegador muestra PDF/JPG y descarga DWG). Propietario o personal municipal del mismo tenant.
 - **Etapas de exigencia:** `DocumentRequirement.stage` = `INGRESO` (se valida al enviar) o `PAGO` (D-15, se exige en Fase 4).
 
@@ -57,7 +58,7 @@ La máquina de estados del expediente (`ApplicationStatus`) sigue `mvp_docs/03-f
 
 ## Servicios externos
 
-Ninguno activo en esta fase. Previstos: SMTP/SendGrid para correos (con cola BullMQ cuando haya Redis — decisión D-003), S3/MinIO para archivos en producción (en desarrollo, disco local `backend/uploads/` — decisión D-007).
+Opcionales (D-017): Google Geocoding (`GOOGLE_MAPS_API_KEY`) y Gemini Flash (`GEMINI_API_KEY`) para dirección y documentos. Sin claves, el sistema sigue con NIT local, heurística de dirección y calidad de archivo. Previstos: SMTP/SendGrid, SAT/RENAP con convenio, S3/MinIO en producción (D-007).
 
 ## Configuración
 

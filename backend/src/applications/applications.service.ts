@@ -11,6 +11,8 @@ import {
   UserRole,
 } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { ContentValidationService } from '../content-validation/content-validation.service';
+import { ContentCheck, CrossCheckIssue, FormValidation } from '../content-validation/types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { classifyProject, ClassifyInput, ClassifyResult } from './classification';
@@ -28,6 +30,13 @@ export interface DocumentCheckResult {
   hasDocument: boolean;
   valid: boolean;
   issues: string[];
+  contentOverall?: string;
+}
+
+export interface ApplicationValidationReport {
+  documents: DocumentCheckResult[];
+  crossCheck: CrossCheckIssue[];
+  formValidation: FormValidation | Record<string, never>;
 }
 
 /** Roles del personal municipal que pueden ver todos los expedientes del tenant. */
@@ -38,6 +47,7 @@ export class ApplicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly contentValidation: ContentValidationService,
   ) {}
 
   // ────────────────────────── Clasificación ──────────────────────────
@@ -84,6 +94,21 @@ export class ApplicationsService {
 
     this.assertFormDataForFormCode(classification.formCode, dto.formData);
 
+    const formValidation = await this.contentValidation.validateForm({
+      direccionExacta: dto.formData.direccionExacta,
+      zona: dto.formData.zona,
+      nitPropietario: dto.formData.nitPropietario,
+      finca: dto.formData.finca,
+      folio: dto.formData.folio,
+      libro: dto.formData.libro,
+    });
+    if (this.contentValidation.hasBlockingFail(formValidation)) {
+      throw new BadRequestException({
+        message: this.formFailMessage(formValidation),
+        formValidation,
+      });
+    }
+
     // El colegiado responsable se toma del perfil verificado del solicitante
     const applicant = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
 
@@ -98,6 +123,7 @@ export class ApplicationsService {
           colegiadoTipo: applicant.collegeType,
           colegiadoNumero: applicant.collegeNumber,
         },
+        formValidation: formValidation as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -109,6 +135,31 @@ export class ApplicationsService {
     );
 
     return application;
+  }
+
+  async previewFormValidation(form: {
+    direccionExacta?: string;
+    zona: string;
+    nitPropietario: string;
+    finca?: string;
+    folio?: string;
+    libro?: string;
+  }): Promise<FormValidation> {
+    return this.contentValidation.validateForm({
+      direccionExacta: form.direccionExacta ?? '',
+      zona: form.zona,
+      nitPropietario: form.nitPropietario,
+      finca: form.finca ?? '',
+      folio: form.folio ?? '',
+      libro: form.libro ?? '',
+    });
+  }
+
+  private formFailMessage(validation: FormValidation): string {
+    const parts = [validation.nit, validation.address, validation.rgp]
+      .filter((f) => f.status === 'fail')
+      .map((f) => f.message);
+    return parts.join(' ') || 'Hay datos del proyecto que no superan la validación automática.';
   }
 
   /** Campos mínimos adicionales exigidos según formulario municipal. */
@@ -133,9 +184,26 @@ export class ApplicationsService {
 
   async update(user: AuthenticatedUser, id: string, dto: CreateApplicationDto['formData']) {
     const application = await this.getOwnedByStatus(user, id, ['BORRADOR']);
+    const formValidation = await this.contentValidation.validateForm({
+      direccionExacta: dto.direccionExacta,
+      zona: dto.zona,
+      nitPropietario: dto.nitPropietario,
+      finca: dto.finca,
+      folio: dto.folio,
+      libro: dto.libro,
+    });
+    if (this.contentValidation.hasBlockingFail(formValidation)) {
+      throw new BadRequestException({
+        message: this.formFailMessage(formValidation),
+        formValidation,
+      });
+    }
     await this.prisma.application.update({
       where: { id: application.id },
-      data: { formData: dto as unknown as Prisma.InputJsonValue },
+      data: {
+        formData: dto as unknown as Prisma.InputJsonValue,
+        formValidation: formValidation as unknown as Prisma.InputJsonValue,
+      },
     });
     await this.audit(user.tenantId, user.id, id, 'Formulario del expediente actualizado');
     return this.findOne(user, id);
@@ -201,6 +269,7 @@ export class ApplicationsService {
             sizeBytes: true,
             reviewStatus: true,
             uploadedAt: true,
+            contentCheck: true,
           },
         },
         observations: {
@@ -238,6 +307,15 @@ export class ApplicationsService {
       application.licenseType.requirements,
       application.documents,
     );
+    const crossCheck = this.contentValidation.crossCheck({
+      formData: (application.formData ?? {}) as Record<string, unknown>,
+      documents: application.licenseType.requirements.map((req) => {
+        const doc = application.documents.find((d) => d.requirementId === req.id);
+        const check = (doc?.contentCheck ?? {}) as unknown as ContentCheck;
+        return { code: req.code, extracted: check.extracted };
+      }),
+      collegeNumber: application.applicant.collegeNumber,
+    });
 
     // Marca los documentos reemplazados tras una observación (el revisor los
     // distingue en verde respecto a la ronda anterior)
@@ -257,6 +335,7 @@ export class ApplicationsService {
       ...application,
       documents,
       validationReport,
+      crossCheck,
       license: application.license
         ? {
             ...application.license,
@@ -286,7 +365,7 @@ export class ApplicationsService {
         documents: { where: { isCurrent: true } },
       },
     });
-    return this.buildValidationReport(withDocs.licenseType.requirements, withDocs.documents);
+    return this.buildFullValidation(withDocs);
   }
 
   /**
@@ -300,15 +379,12 @@ export class ApplicationsService {
       include: {
         licenseType: { include: { requirements: { orderBy: { sortOrder: 'asc' } } } },
         documents: { where: { isCurrent: true } },
-        applicant: { select: { fullName: true } },
+        applicant: { select: { fullName: true, collegeNumber: true } },
       },
     });
 
-    const report = this.buildValidationReport(
-      withDocs.licenseType.requirements,
-      withDocs.documents,
-    );
-    const allValid = report.every((r) => r.stage !== 'INGRESO' || r.valid);
+    const full = this.buildFullValidation(withDocs);
+    const allValid = full.documents.every((r) => r.stage !== 'INGRESO' || r.valid);
 
     if (!allValid) {
       await this.prisma.application.update({
@@ -320,10 +396,10 @@ export class ApplicationsService {
         user.id,
         user.tenantId,
         'Expediente observado por formato',
-        'Algunos documentos faltan o no tienen el formato correcto. Revise el informe de validación del expediente.',
+        'Algunos documentos faltan, no tienen el formato correcto o no superaron la validación de contenido. Revise el informe del expediente.',
         id,
       );
-      return { status: 'OBSERVADO_FORMATO' as const, validationReport: report };
+      return { status: 'OBSERVADO_FORMATO' as const, validationReport: full.documents, crossCheck: full.crossCheck };
     }
 
     await this.prisma.application.update({
@@ -356,7 +432,7 @@ export class ApplicationsService {
       id,
     );
 
-    return { status: 'EN_REVISION_TECNICA' as const, validationReport: report };
+    return { status: 'EN_REVISION_TECNICA' as const, validationReport: full.documents, crossCheck: full.crossCheck };
   }
 
   // ─────────────────── Asignación de revisor (Admin) ───────────────────
@@ -391,7 +467,7 @@ export class ApplicationsService {
 
   // ────────────────────────── Helpers internos ──────────────────────────
 
-  /** Informe por documento: presencia, formato e integridad (tamaño). Público: lo reutiliza el módulo review. */
+  /** Informe por documento: presencia, formato, integridad y contenido (D-017). */
   buildValidationReport(
     requirements: {
       id: string;
@@ -405,11 +481,13 @@ export class ApplicationsService {
       requirementId: string;
       mimeType: string;
       sizeBytes: number;
+      contentCheck?: Prisma.JsonValue | ContentCheck | null;
     }[],
   ): DocumentCheckResult[] {
     return requirements.map((req) => {
       const doc = documents.find((d) => d.requirementId === req.id);
       const issues: string[] = [];
+      let contentOverall: string | undefined;
 
       if (!doc) {
         if (req.required) issues.push('Documento no cargado');
@@ -419,6 +497,15 @@ export class ApplicationsService {
         }
         if (doc.sizeBytes <= 0) {
           issues.push('El archivo está vacío');
+        }
+        const check = (doc.contentCheck ?? {}) as unknown as ContentCheck;
+        contentOverall = check.overall;
+        if (check.overall === 'fail') {
+          const fails = (check.issues ?? [])
+            .filter((i) => i.severity === 'fail')
+            .map((i) => i.message);
+          if (fails.length > 0) issues.push(...fails);
+          else issues.push(check.semantic?.message || check.quality?.message || 'Validación de contenido fallida');
         }
       }
 
@@ -430,8 +517,47 @@ export class ApplicationsService {
         hasDocument: Boolean(doc),
         valid: issues.length === 0,
         issues,
+        contentOverall,
       };
     });
+  }
+
+  private buildFullValidation(app: {
+    formData: Prisma.JsonValue;
+    formValidation?: Prisma.JsonValue | null;
+    licenseType: {
+      requirements: {
+        id: string;
+        code: string;
+        name: string;
+        stage: string;
+        required: boolean;
+        allowedMimeTypes: string[];
+      }[];
+    };
+    documents: {
+      requirementId: string;
+      mimeType: string;
+      sizeBytes: number;
+      contentCheck?: Prisma.JsonValue | ContentCheck | null;
+    }[];
+    applicant?: { collegeNumber?: string | null };
+  }): ApplicationValidationReport {
+    const documents = this.buildValidationReport(app.licenseType.requirements, app.documents);
+    const crossCheck = this.contentValidation.crossCheck({
+      formData: (app.formData ?? {}) as Record<string, unknown>,
+      documents: app.licenseType.requirements.map((req) => {
+        const doc = app.documents.find((d) => d.requirementId === req.id);
+        const check = (doc?.contentCheck ?? {}) as unknown as ContentCheck;
+        return { code: req.code, extracted: check.extracted };
+      }),
+      collegeNumber: app.applicant?.collegeNumber,
+    });
+    return {
+      documents,
+      crossCheck,
+      formValidation: ((app.formValidation as unknown) as FormValidation) ?? {},
+    };
   }
 
   /** Obtiene un expediente propio verificando que esté en uno de los estados permitidos. */
